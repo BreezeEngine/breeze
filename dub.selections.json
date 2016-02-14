@@ -1,0 +1,16 @@
+{
+	"fileVersion": 1,
+	"versions": {
+		"libevent": "2.0.1+2.0.16",
+		"libev": "5.0.0+4.04",
+		"openssl": "1.1.4+1.0.1g",
+		"experimental_allocator": "2.70.0-b1",
+		"memutils": "0.4.4",
+		"vibe-d": "0.7.26",
+		"derelict-util": "2.0.4",
+		"derelict-gl3": "1.0.17",
+		"libasync": "0.7.5",
+		"derelict-sdl2": "2.0.0",
+		"emsi_containers": "0.3.0"
+	}
+}

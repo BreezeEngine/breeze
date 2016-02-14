@@ -1,0 +1,2 @@
+name "ecs"
+dependency "breeze" version="*"

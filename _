@@ -1,0 +1,103 @@
+import std.stdio;
+
+static template same(A...){
+  template as(B...)
+    if(A.length == 1 && B.length == 1)
+  {
+    static if(is(typeof(A)) && is(typeof(B))){
+      enum as = A == B;
+    }
+    else{
+      enum as = is(A == B);
+    }
+  }
+}
+static template contains(C...){
+  import std.meta: anySatisfy;
+  template any(T...){
+    static if(T.length == 0){
+      enum any = false;
+    }
+    else{
+      enum any = containsImpl!((bool a, bool b) => a || b,T);
+    }
+  }
+  template all(T...){
+    static if(T.length == 0){
+      enum all = false;
+    }
+    else{
+      enum all = containsImpl!((bool a, bool b) => a && b,T);
+    }
+  }
+  template containsImpl(alias pred,T...){
+    static if(T.length == 1){
+      enum containsImpl = anySatisfy!(same!(T[0]).as,C);
+    }
+    else{
+      enum containsImpl = pred(anySatisfy!(same!(T[0]).as,C), containsImpl!(pred,T[1..$]));
+    }
+  }
+}
+struct EntityGroup(alias Container, Components...){
+  import std.meta: staticMap,Filter;
+  import std.typecons;
+  alias ComponentsContainer = staticMap!(Container, Components);
+
+  enum hasComponents(T...) = contains!Components.any!T;
+
+  ComponentsContainer componentContainer;
+
+  auto getComponents(C...)(){
+    pragma(msg,ComponentsContainer.stringof);
+    return tuple(Filter!(contains!(staticMap!(Container,C)).all,componentContainer));
+  }
+
+  ref T getGameObject(T)(Handle!T handle){
+    return getContainer!T()[handle.id];
+  }
+}
+enum isSame(A,B) = is(A == B);
+
+struct Handle(T){
+  size_t id;
+  this(size_t id){
+    this.id = id;
+  }
+}
+struct Position{
+  float x,y,z;
+}
+struct Velocity{
+  float x,y,z;
+}
+struct Player{}
+
+template less(alias i){
+  enum less = i < 5;
+}
+template eq5(alias i){
+  enum less = i == 5;
+}
+void main()
+{
+  import std.meta;
+  import std.traits;
+  import std.typecons;
+  alias G = AliasSeq!(Position, Velocity, Player);
+  //writeln(any!Position.Of!G);
+  import std.container: Array;
+  auto eg = EntityGroup!(Array, Position, Velocity)();
+  //auto c = eg.getComponents!(Position);
+  //alias T = Filter!(contains!(staticMap!(Array,Position)).any,eg.componentContainer);
+  alias ArrayTest = AliasSeq!(Array!int,Array!double);
+  Tuple!ArrayTest arrayTest;
+  alias IntTest = AliasSeq!(int,float,double);
+  IntTest intTest;
+  alias S = Filter!(same!(int).as, IntTest);
+  writeln(S.stringof);
+  alias S1 = Filter!(same!(Array!int).as, ArrayTest);
+//  writeln(S.stringof);
+  writeln(same!5.as!5);
+  writeln(same!int.as!float);
+}

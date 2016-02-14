@@ -1,0 +1,9 @@
+name "breeze"
+description "Game Framework"
+authors "Maik Klein"
+license "GPL-2.0"
+dependency "derelict-sdl2" version="~>2.0.0"
+dependency "derelict-gl3" version="~>1.0.0"
+dependency "emsi_containers" version="~>0.3.0"
+
+subPackage "./examples/ecs"
