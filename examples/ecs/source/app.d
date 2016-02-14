@@ -44,84 +44,22 @@ struct UpdatePosSystem{
 }
 struct Physics{}
 
-struct RValue(T){
-    T value;
-    this(T t){
-        import std.algorithm.mutation: move;
-        value = move(t);
-    }
-    T release(){
-        import std.algorithm.mutation: move;
-        return move(value);
-    }
-    alias release this;
-
-    @disable this(this);
-}
-
-struct UniquePtr(T)
-{
-    private T* ptr;
-
-    @disable this(this);
-
-    UniquePtr release()
-    {
-        scope(exit) this.ptr = null;
-        return UniquePtr(this.ptr);
-    }
-
-}
-
-void gcalloc(size_t size){
-    import std.experimental.allocator;
-    auto arr = theAllocator.makeArray!ubyte(size);
-    theAllocator.dispose(arr);
-}
-void malloc(size_t size){
-    import std.experimental.allocator.mallocator;
-    import std.experimental.allocator;
-    auto arr = Mallocator.instance.makeArray!ubyte(size);
-    Mallocator.instance.deallocate(arr);
-}
-struct DVec3{
-    double x,y,z;
-}
-import std.container: Array;
-void test1(const ref Array!DVec3 arr, size_t size, size_t jumpLength){
-    import std.random;
-    float sum = 0;
-    for(size_t i = 0, i2 = 0; i < size; ++i){
-        i2 += uniform(0,jumpLength);
-        sum += arr[i].x + arr[i].y + arr[i].z;
-    }
-}
-void test2(const ref Array!DVec3 arr, size_t size, size_t jumpLength){
-    import std.random;
-    float sum = 0;
-    for(size_t i = 0, i2 = 0; i < size; ++i){
-        i2 += uniform(0,jumpLength);
-        sum += arr[i2].x + arr[i2].y + arr[i2].z;
-    }
-}
-
-string benchCache(size_t size, size_t jumpLength, uint iterations){
-    import std.datetime;
-    import std.range;
-    import std.conv;
-    Array!DVec3 a1 = std.range.repeat(DVec3(1,2,3)).take(size * jumpLength);
-    auto r = benchmark!(() => test1(a1, size, jumpLength), () => test2(a1, size, jumpLength))(iterations);
-    double t1 = to!("seconds", double)((r[0]));
-    double t2 = to!("seconds", double)((r[1]));
-    return to!string(t1) ~ "," ~ to!string(t2);
-}
 void main()
 {
-    import option;
+    import breeze.ecs;
+    import breeze.meta;
     import std.stdio;
-    auto o = some(5);
-    writeln(o.expect("Is null"));
+    import std.container;
 
+    alias cg1 = ComponentGroup!(Array, Position, Velocity);
+    cg1 cg;
+    cg.add(Position(1,2,3), Velocity(1,2,3));
+    cg.add(Position(10,2,3), Velocity(1,2,3));
+    auto handle = cg.getHandle!Position(0);
+    auto handle2 = cg.getHandle!Position(1);
+    cg.swap(0,1);
+    writeln(cg.get!(Position, Velocity)(handle).get()[0].get);
+    //cg.getHandle!Position();
     //benchCache(1000000, 3, 100);
     //writeln(o1);
     //   import std.stdio;

@@ -1,7 +1,6 @@
 module breeze.ecs;
 
 import breeze.meta;
-
 import std.typetuple: allSatisfy;
 import std.range;
 
@@ -51,40 +50,73 @@ template hasDuplicates(Ts...){
         }
     }
 }
-struct GroupHandle(Components...){
-    import breeze.handlearray;
-    import std.meta;
-    alias Handles = staticMap!(Handle, Components);
-    breeze.meta.Tuple!(Handles) handles;
-    this(Handles handles){
-        this.handles = handles;
+struct ComponentHandle(IndexType, HashType){
+    IndexType index;
+    HashType hash;
+    this(IndexType index, HashType hash){
+        this.index = index;
+        this.hash = hash;
     }
-    auto get(Component)(){
-        return handles[staticIndexOf!(Component, Components)];
-    }
+}
+struct EntityManager(IndexType, HashType){
+    import std.container: Array, DList;
+    Array!HashType hashes;
+    DList!IndexType freeIndices;
 
-    bool expired(){
-        return unpack!((ref h) => h.expired).into!(or)(handles.expand);
+    bool isValid(EntityHandle)(EntityHandle handle){
+        return hashes[handle.index] is handle.hash;
+    }
+    void invalidate(EntityHandle)(EntityHandle handle){
+        hashes[handle.index] += 1;
+        freeIndices.insertBack(handle.index);
+    }
+    auto create(Components...)(){
+        alias EntityHandle = ComponentHandle!(IndexType, HashType);
+        if(!freeIndices.empty){
+            auto index = freeIndices.front();
+            freeIndices.removeFront();
+            return EntityHandle(index, hashes[index]);
+        }
+        else{
+            enum HashType zeroHash = 0;
+            hashes.insertBack(zeroHash);
+            IndexType index = cast(IndexType) hashes.length - 1;
+            return EntityHandle(index, hashes[index]);
+        }
     }
 }
 struct ComponentGroup(alias Container, Components...)
-if(!hasDuplicates!(Components))
-{
+if(!hasDuplicates!(Components)){
     import std.meta: staticMap,Filter;
-    import std.typecons;
     import std.range;
+    import option;
+    alias IndexType = uint;
+    alias HashType = short;
     static alias Components1 = Components;
     alias ComponentsContainer = staticMap!(Container, Components);
+    EntityManager!(IndexType, HashType) entityManager;
+
+    IndexType[IndexType] entityIndexMap;
+    IndexType[IndexType] indexEntityMap;
 
     size_t length = 0;
     enum hasComponents(T...) = contains!Components.all!T;
 
-    auto getHandle(C...)(size_t index){
+    auto getHandle(C...)(IndexType index){
+        auto handle = entityManager.create!C();
+        entityIndexMap[handle.index] = index;
+        indexEntityMap[index] = handle.index;
+        return handle;
+    }
+    auto get(C...)(ComponentHandle!(IndexType, HashType) handle){
+        if(!entityManager.isValid(handle)){
+            return none!(Tuple!(staticMap!(RefWrapper,C)))();
+        }
+        auto elementIndex = entityIndexMap[handle.index];
         alias indices = indicies!C.of!Components;
-        auto t = mapTupIndex!((ref a){
-            return a.getHandle(index);
-        },indices)(componentContainer);
-        return GroupHandle!C(t.expand);
+        auto t = unpackAndFilter!(id, indices).into!(tupleRef)(componentContainer.expand);
+        return some(unpack!((ref c){ return refWrapper(c[elementIndex]);}).into!(tuple)(t.expand));
+
     }
     template groupView(C...){
         alias groupView = indicies!(staticMap!(Container,C)).of!ComponentsContainer;
@@ -102,11 +134,24 @@ if(!hasDuplicates!(Components))
         auto r =  tupIndexToRange!(indices)(componentContainer);
         return myZip(r.expand);
     }
+    void swap(IndexType first, IndexType second){
+        import std.algorithm.mutation;
+        foreach(ref container; componentContainer){
+          swap(container[first], container[second]);
+        }
+        if(first in indexEntityMap && second in indexEntityMap){
+            IndexType firstEntity = indexEntityMap[first];
+            IndexType secondEntity = indexEntityMap[second];
+
+            entityIndexMap[firstEntity] = second;
+            entityIndexMap[secondEntity] = first;
+        }
+    }
 
     void remove(size_t index){
-        foreach(ref container; componentContainer){
-            container.remove(index);
-        }
+        //foreach(ref container; componentContainer){
+        //    container.remove(index);
+        //}
     }
 
     breeze.meta.Tuple!ComponentsContainer componentContainer;

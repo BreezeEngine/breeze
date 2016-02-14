@@ -20,6 +20,17 @@ template tupIndexToRange(Indicies...) {
         }
     }
 }
+template mapWithIndex(alias target, alias f, Indicies...){
+    auto mapWithIndex(Ts...)(ref Ts ts){
+        import std.meta;
+        static if(Indicies.length == 0){
+            return target();
+        }
+        else{
+            return target(f(ts[Indicies[0]]), .mapWithIndex!(target, f, Indicies[1..$])(ts).expand);
+        }
+    }
+}
 template mapTupIndex(alias f, Indicies...){
     auto mapTupIndex(Tup)(ref Tup tup){
         import std.meta;
@@ -128,13 +139,40 @@ auto tuple(Ts...)(Ts ts){
         return unpack!(move).into!(Tuple!Ts)(ts);
     }
 }
-static template unpack(alias f){
+struct TupleRef(Types...){
+    import std.meta;
+    alias RefTs = staticMap!(RefWrapper, Types);
+    RefTs expand;
+    static if(Types.length > 0){
+        this(ref Types types){
+            expand = mapToTuple!(refWrapper, types).expand;
+        }
+    }
+    alias expand this;
+}
+
+auto tupleRef(Ts...)(ref Ts ts){
+    return TupleRef!(Ts)(ts);
+}
+
+template unpack(alias f){
     pragma(inline)
     auto into(alias target, Args...)(auto ref Args args){
         import std.conv;
         import std.algorithm;
         import std.range;
         enum s = `target(`~iota(Args.length).map!(i=>text(`f(args[`,i,`])`)).join(",")~`)`;
+        return mixin(s);
+    }
+}
+static template unpackAndFilter(alias f, Indices...){
+    pragma(inline)
+    auto into(alias target, Args...)(ref Args args){
+        import std.conv;
+        import std.algorithm;
+        import std.range;
+        enum s = `target(`~iota(Indices.length).map!(i=>text(`f(args[Indices[`,i,`]])`)).join(",")~`)`;
+        pragma(msg,s);
         return mixin(s);
     }
 }
@@ -173,23 +211,6 @@ struct RefWrapper(T){
 auto refWrapper(T)(ref T t){
     return RefWrapper!(T)(t);
 }
-struct TupleRef(Ts...){
-    import std.meta;
-    alias RefTs = staticMap!(RefWrapper, Ts);
-    RefTs expand;
-    this(ref Ts ts){
-        expand = mapToTuple!(refWrapper, ts).expand;
-    }
-    ref auto into(alias f)(){
-        return unpack!get.into!f(expand);
-    }
-    alias expand this;
-}
-
-auto tupleRef(Ts...)(ref Ts ts){
-    return TupleRef!(Ts)(ts);
-}
-
 ref auto get(R)(ref R r){
     return r.access();
 }
@@ -226,4 +247,7 @@ bool or(Ts...)(Ts ts){
         }
     }
     return false;
+}
+ref T id(T)(ref T t){
+    return t;
 }
