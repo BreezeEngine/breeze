@@ -1,4 +1,5 @@
 module breeze.ecs;
+import std.stdio;
 
 import breeze.meta;
 import std.typetuple: allSatisfy;
@@ -60,18 +61,27 @@ struct ComponentHandle(IndexType, HashType){
 }
 struct EntityManager(IndexType, HashType){
     import std.container: Array, DList;
+    import option;
     Array!HashType hashes;
     DList!IndexType freeIndices;
+    alias EntityHandle = ComponentHandle!(IndexType, HashType);
 
-    bool isValid(EntityHandle)(EntityHandle handle){
+    bool isValid(EntityHandle handle){
         return hashes[handle.index] is handle.hash;
     }
-    void invalidate(EntityHandle)(EntityHandle handle){
-        hashes[handle.index] += 1;
-        freeIndices.insertBack(handle.index);
+    void invalidate(EntityHandle handle){
+        if(isValid(handle)) invalidate(handle.index);
+    }
+    void invalidate(IndexType index){
+        hashes[index] += 1;
+        freeIndices.insertBack(index);
+    }
+    Option!EntityHandle getExistingHandle(IndexType index){
+        import std.algorithm.searching: find;
+        if(!freeIndices[].find(index).empty) return none!EntityHandle();
+        return some(EntityHandle(index, hashes[index]));
     }
     auto create(Components...)(){
-        alias EntityHandle = ComponentHandle!(IndexType, HashType);
         if(!freeIndices.empty){
             auto index = freeIndices.front();
             freeIndices.removeFront();
@@ -85,6 +95,18 @@ struct EntityManager(IndexType, HashType){
         }
     }
 }
+unittest{
+    auto em = EntityManager!(uint, short)();
+    auto handle1 = em.create();
+    auto handle2 = em.create();
+    assert(em.isValid(handle1));
+    assert(em.isValid(handle2));
+
+    em.invalidate(handle1);
+    assert(!em.isValid(handle1));
+    em.invalidate(handle1);
+    assert(!em.isValid(handle1));
+}
 struct ComponentGroup(alias Container, Components...)
 if(!hasDuplicates!(Components)){
     import std.meta: staticMap,Filter;
@@ -95,11 +117,12 @@ if(!hasDuplicates!(Components)){
     static alias Components1 = Components;
     alias ComponentsContainer = staticMap!(Container, Components);
     EntityManager!(IndexType, HashType) entityManager;
+    alias EntityHandle = entityManager.EntityHandle;
 
     IndexType[IndexType] entityIndexMap;
     IndexType[IndexType] indexEntityMap;
 
-    size_t length = 0;
+    IndexType length = 0;
     enum hasComponents(T...) = contains!Components.all!T;
 
     auto getHandle(C...)(IndexType index){
@@ -108,10 +131,11 @@ if(!hasDuplicates!(Components)){
         indexEntityMap[index] = handle.index;
         return handle;
     }
-    auto get(C...)(ComponentHandle!(IndexType, HashType) handle){
+    auto get(C...)(EntityHandle handle){
         if(!entityManager.isValid(handle)){
             return none!(Tuple!(staticMap!(RefWrapper,C)))();
         }
+        writeln(handle.index);
         auto elementIndex = entityIndexMap[handle.index];
         alias indices = indicies!C.of!Components;
         auto t = unpackAndFilter!(id, indices).into!(tupleRef)(componentContainer.expand);
@@ -129,15 +153,19 @@ if(!hasDuplicates!(Components)){
         length += 1;
     }
 
+    bool isValid(EntityHandle handle){
+        return entityManager.isValid(handle);
+    }
     auto ref getRange(C...)(){
         alias indices = indicies!C.of!Components;
         auto r =  tupIndexToRange!(indices)(componentContainer);
         return myZip(r.expand);
     }
-    void swap(IndexType first, IndexType second){
+    void swapIndex(IndexType first, IndexType second){
         import std.algorithm.mutation;
+        if(first is second) return;
         foreach(ref container; componentContainer){
-          swap(container[first], container[second]);
+            swap(container[first], container[second]);
         }
         if(first in indexEntityMap && second in indexEntityMap){
             IndexType firstEntity = indexEntityMap[first];
@@ -146,12 +174,34 @@ if(!hasDuplicates!(Components)){
             entityIndexMap[firstEntity] = second;
             entityIndexMap[secondEntity] = first;
         }
+        else if(first in indexEntityMap){
+            IndexType firstEntity = indexEntityMap[first];
+            entityIndexMap[firstEntity] = second;
+        }
+        else if(second in indexEntityMap){
+            IndexType secondEntity = indexEntityMap[second];
+            entityIndexMap[secondEntity] = first;
+        }
     }
 
-    void remove(size_t index){
-        //foreach(ref container; componentContainer){
-        //    container.remove(index);
-        //}
+    void remove(IndexType index){
+        swapIndex(index, length - 1);
+        if(index in indexEntityMap){
+            IndexType newIndex = length - 1;
+            IndexType indexEntity = indexEntityMap[newIndex];
+            entityManager.invalidate(indexEntity);
+            indexEntityMap.remove(newIndex);
+            entityIndexMap.remove(indexEntity);
+        }
+        foreach(ref container; componentContainer){
+            container.removeBack();
+        }
+        length -= 1;
+    }
+    void remove(EntityHandle handle){
+        if(entityManager.isValid(handle) && handle.index in entityIndexMap){
+            remove(entityIndexMap[handle.index]);
+        }
     }
 
     breeze.meta.Tuple!ComponentsContainer componentContainer;
