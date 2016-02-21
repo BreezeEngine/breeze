@@ -50,15 +50,23 @@ void main()
     import breeze.meta;
     import std.stdio;
     import std.container;
-
+    import breeze.math.vector;
+    import std.exception: enforce;
+    auto v = Vector!(float, 3)(1,2,3);
+    auto v1 = Vector!(float, 3)(1,2,3);
+    auto v3 = v + v1;
+    int[5][5] m;
+    m[0][0] = 1;
+    writeln(m);
     alias cg1 = ComponentGroup!(Array, Position, Velocity);
     cg1 cg;
-    cg.add(Position(1,2,3), Velocity(1,2,3));
-    cg.add(Position(10,2,3), Velocity(1,2,3));
+    cg.add(Position(1,1,1), Velocity(1,1,1));
+    cg.add(Position(2,2,2), Velocity(2,2,2));
     auto handle = cg.getHandle!Position(0);
     auto handle2 = cg.getHandle!Position(1);
-    cg.swap(0,1);
-    writeln(cg.get!(Position, Velocity)(handle).get()[0].get);
+    cg.remove(0);
+    writeln(cg.isValid(handle));
+    writeln(cg.isValid(handle2));
     //cg.getHandle!Position();
     //benchCache(1000000, 3, 100);
     //writeln(o1);

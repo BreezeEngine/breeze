@@ -8,7 +8,7 @@
 		"memutils": "0.4.4",
 		"vibe-d": "0.7.26",
 		"derelict-util": "2.0.4",
-		"derelict-gl3": "1.0.17",
+		"derelict-gl3": "1.0.18",
 		"libasync": "0.7.5",
 		"derelict-sdl2": "2.0.0",
 		"emsi_containers": "0.3.0"

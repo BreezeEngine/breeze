@@ -1,2 +1,4 @@
 name "ecs"
 dependency "breeze" version="*"
+
+targetPath "../../bin"

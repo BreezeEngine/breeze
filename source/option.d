@@ -1,4 +1,3 @@
-import std.variant;
 struct Some(T){
     T value;
 }
@@ -12,7 +11,8 @@ struct Option(T){
         return hasValue;
     }
     ref T get(){
-        if(isNone) throw new Error("Accessing None is now allowed");
+        import std.exception: enforce;
+        enforce(isSome, "");
         return value;
     }
 private:

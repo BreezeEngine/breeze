@@ -7,3 +7,5 @@ dependency "derelict-gl3" version="~>1.0.0"
 dependency "emsi_containers" version="~>0.3.0"
 
 subPackage "./examples/ecs"
+
+targetPath "./bin"
