@@ -18,11 +18,14 @@ T[size] nullArray(T, size_t size)(){
 //    import std.algorithm: count;
 //    assert(nullArray!(float,3)[].count(0) is 3);
 //}
+
 alias Vec2f = Vector!(float, 2);
 alias Vec3f = Vector!(float, 3);
 
 alias Vec2d = Vector!(double, 2);
 alias Vec3d = Vector!(double, 3);
+
+alias Vec2i = Vector!(int, 2);
 
 struct Vector(T, size_t _dimension){
     import breeze.math.units;
@@ -32,10 +35,12 @@ struct Vector(T, size_t _dimension){
 
     private enum vectorCords = "xyzw";
     T[dimension] data = nullArray!(T, dimension);
+
     this(in T[dimension] ts...)
     {
         data = ts;
     }
+
     this(in T[dimension] ts)
     {
         data = ts;
@@ -60,6 +65,7 @@ struct Vector(T, size_t _dimension){
             return Vector!(T,op.length)(_data);
         }
     }
+
     unittest{
         auto v1 = Vector!(float, 4)(1, 2, 3, 4);
         assert(v1.x is 1);
@@ -73,6 +79,7 @@ struct Vector(T, size_t _dimension){
         v1.x = 42;
         assert(v1.x is 42);
     }
+
     Vector opBinary(string op)(in Vector other) const{
         import std.range;
         import std.algorithm.iteration: map;
@@ -81,6 +88,7 @@ struct Vector(T, size_t _dimension){
         mixin ("zip(data[], other.data[]).map!(t => t[0]" ~ op ~ "t[1]).copy(_data[]);");
         return Vector!(T, dimension)(_data);
     }
+
     Vector opBinary(string op)(in T other) const{
         import std.range;
         import std.algorithm.iteration: map;
@@ -89,6 +97,7 @@ struct Vector(T, size_t _dimension){
         mixin ("data[].map!((val){return val" ~ op ~ "other;}).copy(_data[]);");
         return Vector!(T, dimension)(_data);
     }
+
     unittest{
         auto v1 = Vector!(float, 3)(1, 2, 3);
         auto v2 = Vector!(float, 3)(4, 5, 6);
@@ -102,6 +111,7 @@ struct Vector(T, size_t _dimension){
         auto v5 = v1 + 1.0f;
         assert(v5 is Vector!(float, 3)(2,3,4));
     }
+
     static enum Vector zero(){
         import std.range;
         import std.algorithm.iteration: map;
@@ -112,12 +122,14 @@ struct Vector(T, size_t _dimension){
         return Vector!(T, dimension)(_data);
     }
 }
+
 enum isVector(Vec) = __traits(isSame, TemplateOf!(Vec),Vector);
 
 Vec zero(Vec)(){
     Vec.Type[Vec.dimension] data = nullArray!(Vec.Type, Vec.dimension);
     return Vec(data);
 }
+
 unittest{
     assert(zero!Vec2f.isZero);
 }
@@ -126,10 +138,12 @@ bool isZero(Vec)(in Vec v, float tolerance = kindaSmallNumber){
     enum zeroVector = Vec.zero();
     return v.equals(zeroVector, kindaSmallNumber);
 }
+
 unittest{
     auto v1 = Vector!(float, 3)(0,0,0);
     assert(v1.isZero);
 }
+
 /*
   Calculates thedot product between to vectors.The return type is 'float'
 */
@@ -140,6 +154,7 @@ if(isVector!(Vec)){
     import std.algorithm.iteration;
     return zip(v1.data[], v2.data[]).map!(t => t[0] * t[1]).sum;
 }
+
 unittest{
     auto v1 = Vec2f(10,0);
     auto v2 = Vec2f(0,10);
@@ -176,6 +191,7 @@ unittest{
 Vec projectOnTo(Vec)(in Vec v1, in Vec v2){
     return v2 * (v1.dot(v2) / v2.lengthSquared);
 }
+
 /**
   Projects vector a onto vector b with the property that the right angle will always be on
   vector a.
@@ -185,6 +201,7 @@ Vec inverseProjectOnTo(Vec)(in Vec v1, in Vec v2){
     auto cosAngle = dot(v1.unit, otherUnit);
     return otherUnit * v1.length / cosAngle;
 }
+
 unittest{
     import breeze.math.matrix;
     import breeze.math.units;
@@ -197,14 +214,15 @@ unittest{
     assert(b.dot(a - a.projectOnTo(b)) is 0);
 }
 
-Vec mirror(Vec)(in Vec m, in Vec normal){
+Vec reflect(Vec)(in Vec m, in Vec normal){
     return m - normal * normal.dot(m) * 2;
 }
+
 unittest{
     alias Vec2 = Vector!(float, 2);
-    auto v1 = Vec2(1,-1);
-    //        assert(v1.mirror(Vec2(0,1)) is Vec2(1,1));
-    //writeln(Vec2(0,1).mirror(Vec2(1,1).unit).equals(Vec2(-1,0)));
+    assert(Vec2f(1,-1).reflect(Vec2(0,1)).equals(Vec2f(1,1)));
+    assert(Vec2f(0,-1).reflect(Vec2f(1,1).unit).equals(Vec2f(1,0)));
+    assert(Vec2f(-1,0).reflect(Vec2f(1,0)).equals(Vec2f(1,0)));
 }
 
 /**
@@ -250,12 +268,29 @@ unittest{
 }
 
 Vec unit(Vec)(in Vec v){
-    return v / v.length;
+    auto length = v.length;
+    assert(v.length !is 0);
+    return v / length;
 }
 
 unittest{
     auto v1 = Vec3f(10, 0, 0);
     assert(v1.unit is Vec3f(1,0,0));
+}
+
+Vec safeUnit(Vec)(in Vec v){
+    auto lengthSq = v.lengthSquared;
+    if(lengthSq is 1){
+        return v;
+    }
+    else if(lengthSq < 1){
+        return Vec.zero;
+    }
+    return v.unit;
+}
+
+unittest{
+    assert(Vec2f.zero.safeUnit is Vec2f.zero);
 }
 
 float distance(Vec)(in Vec v1, in Vec v2){
@@ -274,6 +309,7 @@ float distanceSquared(Vec)(in Vec v1, in Vec v2){
     import std.math: sqrt;
     return lengthSquared(v1 - v2);
 }
+
 unittest{
     auto v1 = Vec2f(2,2);
     auto v2 = Vec2f(4,2);
@@ -281,18 +317,33 @@ unittest{
 }
 
 /**
-      Compares two Vectors with a tolerance value
+      Compares two vectors with a tolerance value, if the type of the vector
+      is a floating pointer number.
 */
-bool equals(Vec)(in Vec v1, in Vec v2, float tolerance = kindaSmallNumber){
+bool equals(Vec, T = Vec.Type)(in Vec v1, in Vec v2, T tolerance = kindaSmallNumber)
+if(isVector!Vec && isFloatingPoint!(Vec.Type)){
     import std.math;
     import std.range;
     import std.algorithm.iteration;
     return reduce!((a, b) => a && b)(true,
             zip(v1.data[], v2.data[]).map!(t => abs(t[0] - t[1]) < kindaSmallNumber));
 }
+
 unittest{
     auto v1 = Vector!(float, 3)(10, 0, 0);
     auto v2 = Vector!(float, 3)(10, 0, 0);
     assert(v1.equals(v2));
 }
 
+bool equals(Vec)(in Vec v1, in Vec v2)
+if(isVector!Vec && isIntegral!(Vec.Type)){
+    import std.range;
+    import std.algorithm.iteration;
+    return reduce!((a, b) => a && b)(true,
+            zip(v1.data[], v2.data[]).map!(t => t[0] is t[1]));
+}
+
+unittest{
+    auto v1 = Vec2i(1,2);
+    assert(v1.equals(v1));
+}

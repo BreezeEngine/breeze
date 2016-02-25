@@ -16,8 +16,12 @@ auto rotation2d(Radians _angle){
 //    auto v = m.mul(Vector!(float,2)(1,0));
 //    assert(v.equals(Vector!(float,2)(0,1)));
 //}
-struct Matrix(T, size_t rows, size_t colums){
+struct Matrix(T, size_t _rows, size_t _colums){
     import breeze.math.vector: Vector;
+
+    alias Type = T;
+    static immutable size_t rows = _rows;
+    static immutable size_t colums = _colums;
     Vector!(T,colums)[rows] data;
 
     static if(colums == rows){
@@ -29,24 +33,28 @@ struct Matrix(T, size_t rows, size_t colums){
             return mat;
         }
     }
+
     this(in Vector!(T,colums)[rows] _data...){
         data = _data;
     }
-    Matrix!(T, colums, rows) transpose() const{
-        Vector!(T,rows)[colums] _data;
-        foreach(j; 0..rows){
-            foreach(i; 0..colums){
-                _data[i].data[j] = data[j].data[i];
-            }
-        }
-        return typeof(return)(_data);
-    }
+
+//    Matrix!(T, colums, rows) transpose() const{
+//        Vector!(T,rows)[colums] _data;
+//        foreach(j; 0..rows){
+//            foreach(i; 0..colums){
+//                _data[i].data[j] = data[j].data[i];
+//            }
+//        }
+//        return typeof(return)(_data);
+//    }
+
     auto mul(in Vector!(T, colums) other) const{
         auto m = Matrix!(T,1,colums)(other);
         auto trans = m.transpose;
         auto rm = this.mul(trans).transpose;
         return rm.data[0];
     }
+
     auto mul(size_t oRows, size_t oColums)(in Matrix!(T, oRows, oColums) other) const{
         import breeze.math.vector: dot;
         static assert(colums == oRows, "Assert: " ~ colums.stringof ~ " != " ~ oRows.stringof);
@@ -59,33 +67,47 @@ struct Matrix(T, size_t rows, size_t colums){
         }
         return Matrix!(T,rows,oColums)(_data);
     }
-
 }
+
+auto transpose(Mat)(in Mat m){
+    import breeze.math.vector;
+    Vector!(Mat.Type, Mat.rows)[Mat.colums] _data;
+    foreach(j; 0..Mat.rows){
+        foreach(i; 0..Mat.colums){
+            _data[i].data[j] = m.data[j].data[i];
+        }
+    }
+    return Matrix!(Mat.Type, Mat.colums, Mat.rows)(_data);
+}
+
+unittest{
+    import breeze.math.vector;
+    alias Vec3 = Vector!(float,3);
+    auto m  = Matrix!(float,3,3)(
+            Vec3(1, 2, 3),
+            Vec3(4, 5, 6),
+            Vec3(7, 8, 9));
+
+    auto m2 = Matrix!(float,3,3)(
+            Vec3(1, 4, 7),
+            Vec3(2, 5, 8),
+            Vec3(3, 6, 9));
+    assert(m.transpose is m2);
+}
+
 unittest{
     import breeze.math.vector;
     auto id = Matrix!(float,3,3).identity();
     alias Vec2 = Vector!(float,2);
     alias Vec3 = Vector!(float,3);
     auto m  = Matrix!(float,3,3)(Vec3(1, 2, 3),
-                                 Vec3(4, 5, 6),
-                                 Vec3(7, 8, 9));
-
-    auto m2 = Matrix!(float,3,2)(Vec2(1, 4),
-                                 Vec2(2, 5),
-                                 Vec2(3, 6));
-    assert(m.mul(id) is m);
-}
-unittest{
-    import breeze.math.vector;
-    alias Vec3 = Vector!(float,3);
-    auto m  = Matrix!(float,3,3)(Vec3(1, 2, 3),
             Vec3(4, 5, 6),
             Vec3(7, 8, 9));
 
-    auto m2 = Matrix!(float,3,3)(Vec3(1, 4, 7),
-            Vec3(2, 5, 8),
-            Vec3(3, 6, 9));
-    assert(m.transpose is m2);
+    auto m2 = Matrix!(float,3,2)(Vec2(1, 4),
+            Vec2(2, 5),
+            Vec2(3, 6));
+    assert(m.mul(id) is m);
 }
 unittest{
     import breeze.math.vector;
