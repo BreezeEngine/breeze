@@ -5,20 +5,26 @@ struct Degrees{
     this(in float value){
         this.value = value;
     }
+
     this(Radians r){
         import std.math: PI;
-        value = r.value * 360.0f / (2*PI);
+        static immutable ratio = 360.0f / (2*PI);
+        value = r.value * ratio;
     }
+
+    Radians radians(){
+        return Radians(this);
+    }
+
     auto opBinary(string op)(in Degrees other){
          return Degrees(mixin("value" ~ op ~ "other.value"));
     }
-    auto opBinary(string op)(in Radians other){
-         return Degrees(mixin("value" ~ op ~ "Degrees(other).value"));
-    }
-    void opOpAssign(string op, T)(in T other)
-    if(is(T == Radians) || is(T == Degrees)){
+
+    void opOpAssign(string op)(in Degrees other){
         value = this.opBinary!op(other).value;
     }
+
+    alias radians this;
 }
 
 struct Radians{
@@ -26,20 +32,25 @@ struct Radians{
     this(float value){
         this.value = value;
     }
+
     this(Degrees d){
         import std.math: PI;
-        value = d.value * (2*PI) / 360.0f;
+        static immutable ratio = (2*PI) / 360.0f;
+        value = d.value * ratio;
     }
+
     auto opBinary(string op)(in Radians other){
          return Radians(mixin("value" ~ op ~ "other.value"));
     }
-    auto opBinary(string op)(in Degrees other){
-         return Radians(mixin("value" ~ op ~ "Radians(other).value"));
-    }
-    void opOpAssign(string op, T)(in T other)
-    if(is(T == Radians) || is(T == Degrees)){
+
+    void opOpAssign(string op)(in Radians other){
         value = this.opBinary!op(other).value;
     }
+
+    Degrees degrees(){
+        return Degrees(this);
+    }
+    alias degrees this;
 }
 
 unittest{

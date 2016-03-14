@@ -2,9 +2,7 @@ module breeze.math.vector;
 import std.stdio;
 import std.traits;
 import breeze.math.units;
-
-static immutable enum float kindaSmallNumber = 0.000001f;
-
+import breeze.math.constants;
 
 T[size] nullArray(T, size_t size)(){
     import std.range;
@@ -21,6 +19,7 @@ T[size] nullArray(T, size_t size)(){
 
 alias Vec2f = Vector!(float, 2);
 alias Vec3f = Vector!(float, 3);
+alias Vec4f = Vector!(float, 4);
 
 alias Vec2d = Vector!(double, 2);
 alias Vec3d = Vector!(double, 3);
@@ -46,7 +45,7 @@ struct Vector(T, size_t _dimension){
         data = ts;
     }
 
-    auto ref opDispatch(string op)()
+    auto opDispatch(string op)() const
     if(op.length <= dimension){
         import std.range;
         import std.string: indexOf;
@@ -76,11 +75,11 @@ struct Vector(T, size_t _dimension){
         assert(v1.xy is Vector!(float, 2)(1,2));
         assert(v1.xyzw is v1);
 
-        v1.x = 42;
-        assert(v1.x is 42);
+//        v1.x = 42;
+//        assert(v1.x is 42);
     }
 
-    Vector opBinary(string op)(in Vector other) const{
+    Vector opBinary(string op)(const Vector other) const{
         import std.range;
         import std.algorithm.iteration: map;
         import std.algorithm.mutation: copy;
@@ -89,7 +88,7 @@ struct Vector(T, size_t _dimension){
         return Vector!(T, dimension)(_data);
     }
 
-    Vector opBinary(string op)(in T other) const{
+    Vector opBinary(string op)(const T other) const{
         import std.range;
         import std.algorithm.iteration: map;
         import std.algorithm.mutation: copy;
@@ -134,7 +133,7 @@ unittest{
     assert(zero!Vec2f.isZero);
 }
 
-bool isZero(Vec)(in Vec v, float tolerance = kindaSmallNumber){
+bool isZero(Vec)(const Vec v, float tolerance = kindaSmallNumber){
     enum zeroVector = Vec.zero();
     return v.equals(zeroVector, kindaSmallNumber);
 }
@@ -147,7 +146,7 @@ unittest{
 /*
   Calculates thedot product between to vectors.The return type is 'float'
 */
-float dot(Vec)(in Vec v1, in Vec v2)
+float dot(Vec)(const Vec v1, const Vec v2)
 if(isVector!(Vec)){
     import std.exception: enforce;
     import std.range: zip;
@@ -162,7 +161,7 @@ unittest{
     assert(dot(v1.unit ,v1.unit) is 1);
 }
 
-R length(R = float, Vec)(in Vec v){
+R length(R = float, Vec)(const Vec v){
     import std.math: sqrt;
     return sqrt(v.lengthSquared);
 }
@@ -172,7 +171,7 @@ unittest{
     assert(v1.length == 3);
 }
 
-float lengthSquared(Vec)(in Vec v)
+float lengthSquared(Vec)(const Vec v)
 if(isVector!(Vec)){
     import std.math: sqrt;
     return dot(v,v);
@@ -188,7 +187,7 @@ unittest{
   Projects vector a onto vector b with the property that the right angle will always be on
   vector b.
 */
-Vec projectOnTo(Vec)(in Vec v1, in Vec v2){
+Vec projectOnTo(Vec)(const Vec v1, const Vec v2){
     return v2 * (v1.dot(v2) / v2.lengthSquared);
 }
 
@@ -196,7 +195,7 @@ Vec projectOnTo(Vec)(in Vec v1, in Vec v2){
   Projects vector a onto vector b with the property that the right angle will always be on
   vector a.
 */
-Vec inverseProjectOnTo(Vec)(in Vec v1, in Vec v2){
+Vec inverseProjectOnTo(Vec)(const Vec v1, const Vec v2){
     auto otherUnit = v2.unit;
     auto cosAngle = dot(v1.unit, otherUnit);
     return otherUnit * v1.length / cosAngle;
@@ -214,7 +213,7 @@ unittest{
     assert(b.dot(a - a.projectOnTo(b)) is 0);
 }
 
-Vec reflect(Vec)(in Vec m, in Vec normal){
+Vec reflect(Vec)(const Vec m, const Vec normal){
     return m - normal * normal.dot(m) * 2;
 }
 
@@ -228,7 +227,7 @@ unittest{
 /**
   Checks if the vector is of length 1 by taking the difference of 1 - lengthSquared.
 */
-bool isUnit(Vec)(in Vec v, float tolerance = kindaSmallNumber){
+bool isUnit(Vec)(const Vec v, float tolerance = kindaSmallNumber){
     import std.math: abs;
     auto length = v.lengthSquared;
     return abs(typeof(length)(1) - length) < tolerance;
@@ -238,7 +237,7 @@ unittest{
     assert(Vec2f(10,15).unit.isUnit);
 }
 
-Radians angle(Vec)(in Vec v1, in Vec v2) {
+Radians angle(Vec)(const Vec v1, const Vec v2) {
     import std.math: acos;
     //BUG REPORT linker error
     //return Radians(acos(v1.unit.dot(v2.unit)));
@@ -252,7 +251,7 @@ unittest{
     assert(Degrees(v1.angle(v2)) is Degrees(90));
 }
 
-auto abs(Vec)(in Vec v){
+auto abs(Vec)(const Vec v){
     import std.range;
     import std.algorithm.iteration: map;
     import std.algorithm.mutation: copy;
@@ -267,7 +266,7 @@ unittest{
     assert(v1.abs is Vec2f(1,1));
 }
 
-Vec unit(Vec)(in Vec v){
+Vec unit(Vec)(const Vec v){
     auto length = v.length;
     assert(v.length !is 0);
     return v / length;
@@ -278,7 +277,7 @@ unittest{
     assert(v1.unit is Vec3f(1,0,0));
 }
 
-Vec safeUnit(Vec)(in Vec v){
+Vec safeUnit(Vec)(const Vec v){
     auto lengthSq = v.lengthSquared;
     if(lengthSq is 1){
         return v;
@@ -293,7 +292,7 @@ unittest{
     assert(Vec2f.zero.safeUnit is Vec2f.zero);
 }
 
-float distance(Vec)(in Vec v1, in Vec v2){
+float distance(Vec)(const Vec v1, const Vec v2){
     import std.math: sqrt;
     return length(v1 - v2);
 }
@@ -305,7 +304,7 @@ unittest{
     assert(distance(v1, v2) is length(v1 - v2));
 }
 
-float distanceSquared(Vec)(in Vec v1, in Vec v2){
+float distanceSquared(Vec)(const Vec v1, const Vec v2){
     import std.math: sqrt;
     return lengthSquared(v1 - v2);
 }
@@ -320,13 +319,13 @@ unittest{
       Compares two vectors with a tolerance value, if the type of the vector
       is a floating pointer number.
 */
-bool equals(Vec, T = Vec.Type)(in Vec v1, in Vec v2, T tolerance = kindaSmallNumber)
+bool equals(Vec, T = Vec.Type)(const Vec v1, const Vec v2, T tolerance = kindaSmallNumber)
 if(isVector!Vec && isFloatingPoint!(Vec.Type)){
     import std.math;
-    import std.range;
+    import breeze.meta: zip;
     import std.algorithm.iteration;
-    return reduce!((a, b) => a && b)(true,
-            zip(v1.data[], v2.data[]).map!(t => abs(t[0] - t[1]) < kindaSmallNumber));
+    import std.algorithm.searching;
+    return zip(v1.data[], v2.data[]).map!(t => abs(t[0] - t[1]) < kindaSmallNumber).all;
 }
 
 unittest{
@@ -335,12 +334,12 @@ unittest{
     assert(v1.equals(v2));
 }
 
-bool equals(Vec)(in Vec v1, in Vec v2)
+bool equals(Vec)(const Vec v1, const Vec v2)
 if(isVector!Vec && isIntegral!(Vec.Type)){
-    import std.range;
+    import breeze.meta: zip;
     import std.algorithm.iteration;
-    return reduce!((a, b) => a && b)(true,
-            zip(v1.data[], v2.data[]).map!(t => t[0] is t[1]));
+    import std.algorithm.searching: all;
+    return zip(v1.data[], v2.data[]).map!(t => t[0] is t[1]).all;
 }
 
 unittest{

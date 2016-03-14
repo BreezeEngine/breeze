@@ -1,0 +1,4 @@
+name "opengl"
+dependency "breeze" version="*"
+
+targetPath "../../bin"

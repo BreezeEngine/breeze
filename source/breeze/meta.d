@@ -211,10 +211,12 @@ struct RefWrapper(T){
 auto refWrapper(T)(ref T t){
     return RefWrapper!(T)(t);
 }
+
 ref auto get(R)(ref R r){
     return r.access();
 }
-struct MyZip(Ranges...)
+
+struct Zip(alias tuple, Ranges...)
 if (Ranges.length && allSatisfy!(isInputRange, Ranges)){
     Ranges ranges;
     this(Ranges ranges){
@@ -224,7 +226,7 @@ if (Ranges.length && allSatisfy!(isInputRange, Ranges)){
         return unpack!((ref a) => a.empty()).into!(or)(ranges);
     }
     auto ref front(){
-        return unpack!(cfront).into!(tupleRef)(ranges);
+        return unpack!(cfront).into!(tuple)(ranges);
     }
     void popFront(){
         foreach(ref range; ranges){
@@ -233,12 +235,17 @@ if (Ranges.length && allSatisfy!(isInputRange, Ranges)){
     }
 }
 
-ref auto cfront(T)(ref T t){
+auto ref cfront(T)(ref T t){
     return t.front();
 }
 
-auto myZip(Ranges...)(Ranges ranges){
-    return MyZip!Ranges(ranges);
+auto zipRef(Ranges...)(Ranges ranges){
+    return Zip!(tupleRef, Ranges)(ranges);
+}
+
+auto zip(Ranges...)(Ranges ranges){
+    import std.typecons: tuple;
+    return Zip!(tuple, Ranges)(ranges);
 }
 bool or(Ts...)(Ts ts){
     foreach(index, t; ts){

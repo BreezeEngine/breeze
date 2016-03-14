@@ -5,6 +5,7 @@
 		"libev": "5.0.0+4.04",
 		"openssl": "1.1.4+1.0.1g",
 		"experimental_allocator": "2.70.0-b1",
+		"derelict-glfw3": "2.0.0",
 		"memutils": "0.4.4",
 		"vibe-d": "0.7.26",
 		"derelict-util": "2.0.4",
