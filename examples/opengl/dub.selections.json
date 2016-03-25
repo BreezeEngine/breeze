@@ -1,11 +1,12 @@
 {
 	"fileVersion": 1,
 	"versions": {
+		"derelict-enet": "2.0.0",
+		"experimental_allocator": "2.70.0-b1",
+		"derelict-glfw3": "2.0.0",
+		"derelict-util": "2.0.4",
 		"derelict-gl3": "1.0.18",
 		"derelict-sdl2": "2.0.0",
-		"derelict-util": "2.0.4",
-		"emsi_containers": "0.3.0",
-		"experimental_allocator": "2.70.0-b1",
-		"derelict-glfw3": "2.0.0"
+		"emsi_containers": "0.3.0"
 	}
 }

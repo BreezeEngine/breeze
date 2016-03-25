@@ -1,0 +1,4 @@
+name "soatest"
+dependency "breeze" version="*"
+
+targetPath "../../bin"

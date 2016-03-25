@@ -131,11 +131,11 @@ if(!hasDuplicates!(Components)){
         indexEntityMap[index] = handle.index;
         return handle;
     }
+
     auto get(C...)(EntityHandle handle){
         if(!entityManager.isValid(handle)){
             return none!(Tuple!(staticMap!(RefWrapper,C)))();
         }
-        writeln(handle.index);
         auto elementIndex = entityIndexMap[handle.index];
         alias indices = indicies!C.of!Components;
         auto t = unpackAndFilter!(id, indices).into!(tupleRef)(componentContainer.expand);
@@ -156,11 +156,13 @@ if(!hasDuplicates!(Components)){
     bool isValid(EntityHandle handle){
         return entityManager.isValid(handle);
     }
+
     auto ref getRange(C...)(){
         alias indices = indicies!C.of!Components;
         auto r =  tupIndexToRange!(indices)(componentContainer);
         return myZip(r.expand);
     }
+
     void swapIndex(IndexType first, IndexType second){
         import std.algorithm.mutation;
         if(first is second) return;

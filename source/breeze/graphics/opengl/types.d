@@ -11,3 +11,15 @@ enum BufferType{
     Element = GL_ELEMENT_ARRAY_BUFFER
 }
 
+enum PrimitiveType{
+    Int = GL_INT,
+    UInt = GL_UNSIGNED_INT,
+    Float = GL_FLOAT,
+}
+
+enum DrawMode{
+    Triangles = GL_TRIANGLES,
+    Line = GL_LINE,
+    Points = GL_POINTS
+}
+

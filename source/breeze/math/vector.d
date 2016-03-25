@@ -45,24 +45,25 @@ struct Vector(T, size_t _dimension){
         data = ts;
     }
 
-    auto opDispatch(string op)() const
-    if(op.length <= dimension){
-        import std.range;
+    ref auto opDispatch(string op)() inout
+    if(op.length is 1){
         import std.string: indexOf;
         import std.algorithm.iteration: map;
-        static if(op.length == 1){
-            enum index = vectorCords.indexOf(op);
-            return data[index];
-        }
-        else{
-            import std.algorithm.mutation: copy;
-            import std.algorithm.searching: count;
-            static immutable indices = op.map!(c => vectorCords.indexOf(c)).array;
-            static assert(indices[].count(-1) == 0, "Combination of " ~op~" does not exist.");
-            T[op.length] _data;
-            indices.map!(i => data[i]).copy(_data[]);
-            return Vector!(T,op.length)(_data);
-        }
+        enum index = vectorCords.indexOf(op);
+        return data[index];
+    }
+    auto opDispatch(string op)() const
+    if(op.length > 1 && op.length <= dimension){
+        import std.string: indexOf;
+        import std.algorithm.iteration: map;
+        import std.range: array;
+        import std.algorithm.mutation: copy;
+        import std.algorithm.searching: count;
+        static immutable indices = op.map!(c => vectorCords.indexOf(c)).array;
+        static assert(indices[].count(-1) == 0, "Combination of " ~op~" does not exist.");
+        T[op.length] _data;
+        indices.map!(i => data[i]).copy(_data[]);
+        return Vector!(T,op.length)(_data);
     }
 
     unittest{
@@ -75,12 +76,12 @@ struct Vector(T, size_t _dimension){
         assert(v1.xy is Vector!(float, 2)(1,2));
         assert(v1.xyzw is v1);
 
-//        v1.x = 42;
-//        assert(v1.x is 42);
+        //        v1.x = 42;
+        //        assert(v1.x is 42);
     }
 
     Vector opBinary(string op)(const Vector other) const{
-        import std.range;
+        import std.range: zip;
         import std.algorithm.iteration: map;
         import std.algorithm.mutation: copy;
         T[dimension] _data;
@@ -115,7 +116,6 @@ struct Vector(T, size_t _dimension){
         import std.range;
         import std.algorithm.iteration: map;
         import std.algorithm.mutation: fill;
-        static import std.math;
         T[dimension] _data;
         fill(_data[],0);
         return Vector!(T, dimension)(_data);
@@ -146,7 +146,7 @@ unittest{
 /*
   Calculates thedot product between to vectors.The return type is 'float'
 */
-float dot(Vec)(const Vec v1, const Vec v2)
+auto dot(Vec)(const Vec v1, const Vec v2)
 if(isVector!(Vec)){
     import std.exception: enforce;
     import std.range: zip;
@@ -161,7 +161,8 @@ unittest{
     assert(dot(v1.unit ,v1.unit) is 1);
 }
 
-R length(R = float, Vec)(const Vec v){
+auto length(Vec)(const Vec v)
+if(isVector!(Vec)){
     import std.math: sqrt;
     return sqrt(v.lengthSquared);
 }
@@ -171,7 +172,7 @@ unittest{
     assert(v1.length == 3);
 }
 
-float lengthSquared(Vec)(const Vec v)
+auto lengthSquared(Vec)(const Vec v)
 if(isVector!(Vec)){
     import std.math: sqrt;
     return dot(v,v);
@@ -321,10 +322,10 @@ unittest{
 */
 bool equals(Vec, T = Vec.Type)(const Vec v1, const Vec v2, T tolerance = kindaSmallNumber)
 if(isVector!Vec && isFloatingPoint!(Vec.Type)){
-    import std.math;
+    import std.math: abs;
     import breeze.meta: zip;
-    import std.algorithm.iteration;
-    import std.algorithm.searching;
+    import std.algorithm.iteration: map;
+    import std.algorithm.searching: all;
     return zip(v1.data[], v2.data[]).map!(t => abs(t[0] - t[1]) < kindaSmallNumber).all;
 }
 
@@ -337,7 +338,7 @@ unittest{
 bool equals(Vec)(const Vec v1, const Vec v2)
 if(isVector!Vec && isIntegral!(Vec.Type)){
     import breeze.meta: zip;
-    import std.algorithm.iteration;
+    import std.algorithm.iteration: map;
     import std.algorithm.searching: all;
     return zip(v1.data[], v2.data[]).map!(t => t[0] is t[1]).all;
 }

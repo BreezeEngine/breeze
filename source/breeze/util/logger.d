@@ -38,6 +38,6 @@ class Logger
 unittest{
 
     //Logger.get().logLevel = Log
-    Logger.get().error("Test");
+    //Logger.get().error("Test");
 }
 

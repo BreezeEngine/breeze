@@ -39,5 +39,5 @@ private:
 unittest{
     alias Test = Algebraic!(int, float);
     Test a = 5;
-    writeln(*a.peek!int);
+    //writeln(*a.peek!int);
 }
