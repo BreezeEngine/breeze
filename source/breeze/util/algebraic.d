@@ -4,14 +4,14 @@ struct Algebraic(Types...)
 if(Types.length < char.max - 1){
     import std.meta: IndexOf;
 
-    this(T)(in T t){
+    this(T)(T t){
         enum index = IndexOf!(T, Types);
         static assert(index >=0, "Type: '"~T.stringof~"'" ~ " is not inside " ~ Types.stringof);
         type = index;
         types[index] = t;
     }
 
-    void opAssign(T)(in T t){
+    void opAssign(T)(T t){
         enum index = IndexOf!(T, Types);
         static assert(index >=0, "Type: '"~T.stringof~"'" ~ " is not inside " ~ Types.stringof);
         type = index;
@@ -37,7 +37,12 @@ private:
     }
 }
 unittest{
-    alias Test = Algebraic!(int, float);
-    Test a = 5;
+    struct Foo{
+        int* i;
+    }
+    alias Test = Algebraic!(uint, float);
+    enum uint i = 5;
+    enum Test a = i;
     //writeln(*a.peek!int);
+
 }

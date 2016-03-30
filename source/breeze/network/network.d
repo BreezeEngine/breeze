@@ -35,27 +35,35 @@ struct Peer{
         socket.bind(address);
     }
 
+
     void poll(){
         import std.algorithm.searching;
         import std.datetime;
         import std.range;
-        Address _address;
-        if(socket.receiveFrom(header.buffer, _address) is 0 || _address is null) return;
+        long res = 1;
+        while(res > 0){
+            Address _address;
+            res = socket.receiveFrom(header.buffer, _address);
+            auto packetHeader = &header.header;
+            if(res <= 0) return;
+            if(packetHeader.hash !is typeid(Peer).toHash) return;
 
-        auto packetHeader = &header.header;
-        if(packetHeader.hash == typeid(Peer).toHash){
-            if(packetHeader.command is Command.Connect){
-                if(!remotePeers.address.canFind!((c) => c == _address)){
-                    remotePeers.insertBack(RemotePeer(_address, Clock.currTime));
+            final switch(packetHeader.command) with (Command){
+            case Connect:
+                if(!remotePeers.address.canFind!((c) => c is _address)){
+                    auto peer = RemotePeer(_address, Clock.currTime);
+                    remotePeers.insertBack(peer);
+                    writeln(remotePeers.length);
                 }
-            }
-        else if(packetHeader.command is Command.KeepAlive){
-                auto arr = remotePeers.address.enumerate(0).find!((t){
-                    return t.value == _address;
-                });
-                if(arr.length == 1){
-                    remotePeers.lastReceivedPacket[arr[0][0]] = Clock.currTime;
+                break;
+            case Disconnect:
+                break;
+            case KeepAlive:
+                auto index = remotePeers.address.countUntil!((ref adr) => adr is _address) - 1;
+                if(index >= 0){
+                    remotePeers.lastReceivedPacket[index] = Clock.currTime;
                 }
+                break;
             }
         }
     }
@@ -76,18 +84,32 @@ struct RemotePeer{
 unittest{
     import std.socket;
     import std.stdio;
-
+    import breeze.util.soa;
     import std.datetime;
+    import std.experimental.allocator;
+    import std.experimental.allocator.mallocator;
+    auto p0 = Peer(4239);
     auto p1 = Peer(4240);
     auto p2 = Peer(4241);
     auto p3 = Peer(4242);
 
-    p1.connect(p2);
-    p2.poll;
-    p3.connect(p2);
-    p2.poll;
-    writeln(p2.remotePeers.address);
-    //    writeln(p2.remoteClients[]);
+    Address[] adr = Mallocator.instance.makeArray!(Address)(5);
+    adr[0] = new InternetAddress(1234);
+    adr[1] = new InternetAddress(1234);
+    adr[2] = new InternetAddress(1234);
+    writeln(adr.length);
+    SOA!RemotePeer remotePeers;
+    //p3.poll;
+    remotePeers.insertBack(RemotePeer(new InternetAddress(1234), Clock.currTime));
+    remotePeers.insertBack(RemotePeer(new InternetAddress(1234), Clock.currTime));
+    remotePeers.insertBack(RemotePeer(new InternetAddress(1234), Clock.currTime));
+    remotePeers.insertBack(RemotePeer(new InternetAddress(1234), Clock.currTime));
+    remotePeers.insertBack(RemotePeer(new InternetAddress(1234), Clock.currTime));
+
+    import std.container;
+    writeln("end: ", (Array!int).sizeof);
+
+
     //    p2.poll;
     //    writeln(p2.remoteClients[]);
     //    p2.poll;

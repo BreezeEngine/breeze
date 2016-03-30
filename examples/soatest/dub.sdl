@@ -1,4 +1,5 @@
 name "soatest"
 dependency "breeze" version="*"
+dependency "emsi_containers" version="~>0.3.0"
 
 targetPath "../../bin"

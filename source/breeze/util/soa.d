@@ -18,10 +18,11 @@ struct SOA(T){
     this(size_t _size, IAllocator _alloc = allocatorObject(Mallocator.instance)){
         alloc = _alloc;
         size = _size;
+        _length = size;
         allocate(size);
     }
 
-    ref auto opDispatch(string name)(){
+    ref auto opDispatch(string name)() inout{
         import std.meta: staticIndexOf;
         alias index = staticIndexOf!(name, MemberNames);
         static assert(index >= 0);
@@ -55,6 +56,7 @@ struct SOA(T){
         }
     }
 
+    size_t _length = 0;
 private:
     void length(size_t len)@property{
         _length = len;
@@ -63,7 +65,6 @@ private:
     Tuple!ArrayTypes containers;
     IAllocator alloc;
 
-    size_t _length = 0;
     size_t size = 0;
     short growFactor = 2;
 
@@ -93,15 +94,74 @@ private:
     }
 }
 
+struct SOA2(T, alias Container){
+    import std.experimental.allocator;
+    import std.experimental.allocator.mallocator;
+
+    import std.meta: staticMap;
+    import std.typecons: Tuple;
+    import std.traits: FieldNameTuple;
+
+    alias toType(string s) = typeof(__traits(getMember, T, s));
+
+    alias MemberNames = FieldNameTuple!T;
+    alias Types = staticMap!(toType, MemberNames);
+    alias ArrayTypes = staticMap!(Container, Types);
+
+    this(size_t _size, IAllocator _alloc = allocatorObject(Mallocator.instance)){
+        alloc = _alloc;
+        length = _size;
+        foreach(ref container; containers){
+            //container.length(_size);
+        }
+    }
+
+    ref auto opDispatch(string name)() inout{
+        import std.meta: staticIndexOf;
+        alias index = staticIndexOf!(name, MemberNames);
+        static assert(index >= 0);
+        return containers[index];
+    }
+
+    void insertBack(Types types){
+        foreach(index, ref container; containers){
+            container.insert(types[index]);
+        }
+        length = length + 1;
+    }
+
+    void insertBack(T t){
+        foreach(index, _; Types){
+            containers[index].insert(__traits(getMember, t, MemberNames[index]));
+        }
+        length = length + 1;
+    }
+
+    size_t length() const @property{
+        return _length;
+    }
+
+private:
+    void length(size_t len)@property{
+        _length = len;
+    }
+
+    ArrayTypes containers;
+    IAllocator alloc;
+
+    size_t _length = 0;
+}
 unittest{
     struct Vec2{
         float x;
         float y;
     }
-    auto s = SOA!(Vec2)();
-
-    s.insertBack(1.0f, 2.0f);
-    s.insertBack(Vec2(1.0, 2.0f));
-    writeln(s.x); // [1, 1]
-    writeln(s.y); // [2, 2]
+    import containers.dynamicarray;
+    static import breeze.handlearray;
+    import std.container;
+    writeln("D: ", DynamicArray!(int).sizeof);
+    writeln("D1: ", Array!(int).sizeof);
+    writeln("D2: ", breeze.handlearray.Array!(int).sizeof);
+    writeln("D3: ",(int[]).sizeof);
+    auto s1 = SOA2!(Vec2, Array)();
 }
