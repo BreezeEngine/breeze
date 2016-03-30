@@ -1,8 +1,6 @@
-box: golang
+box: lega911/dlang
 build:
   steps:
-    - setup-d-workspace
-
     - script:
         name: dub build
         code: |
