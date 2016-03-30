@@ -1,0 +1,9 @@
+box: golang
+build:
+  steps:
+    - setup-d-workspace
+
+    - script:
+        name: dub build
+        code: |
+          dub build
