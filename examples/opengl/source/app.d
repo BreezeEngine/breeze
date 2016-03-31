@@ -38,11 +38,7 @@ void main()
     import breeze.math.vector;
     import std.conv;
     import std.range;
-    import derelict.enet.enet;
 
-    DerelictENet.load();
-    writeln("enet ",enet_initialize());
-    DerelictGLFW3.load();
     DerelictGL3.load();
     glfwInit();
     // Set all the required options for GLFW
