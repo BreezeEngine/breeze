@@ -2,6 +2,7 @@ module breeze.math.matrix;
 import std.stdio;
 
 import breeze.math.units;
+import breeze.math.vector;
 
 auto rotation2d(Radians _angle){
     import breeze.math.vector;
@@ -11,6 +12,42 @@ auto rotation2d(Radians _angle){
                               Vec2(sin(_angle.value), cos(_angle.value)));
 }
 
+auto lookAt(Vec)(const Vec eye, const Vec center, const Vec up)
+if(isVector!Vec && Vec.dimension is 3){
+    auto z = (eye - center).unit;
+    auto y = up.unit;
+    auto x = y.cross(z);
+    alias Mat = Matrix!(Vec.Type, 4, 4);
+    alias Vec4 = Vector!(Vec.Type, 4);
+    return Mat(Vec4(x, 0),
+               Vec4(y, 0),
+               Vec4(z, 0),
+               Vec4(0, 0, 0, 1)) * translate(-eye);
+}
+unittest{
+    import breeze.math.vector;
+    auto v1 = Vec3f(1, 1 ,1);
+    auto v2 = Vec3f(2, 1 ,1);
+    writeln(lookAt(v1, v2, v1));
+}
+auto translate(Vec)(const Vec dir){
+    auto mat = Mat4f.identity();
+    mat.data[0].w = dir.x;
+    mat.data[1].w = dir.y;
+    mat.data[2].w = dir.z;
+    return mat;
+}
+unittest{
+}
+
+alias Mat2f = Matrix!(float, 2, 2);
+alias Mat2x2f = Mat2f;
+
+alias Mat3f = Matrix!(float, 3, 3);
+alias Mat3x3f = Mat3f;
+
+alias Mat4f = Matrix!(float, 4, 4);
+alias Mat4x4f = Mat4f;
 unittest{
     import breeze.math.vector;
     import std.math;

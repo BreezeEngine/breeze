@@ -159,9 +159,9 @@ unittest{
     import containers.dynamicarray;
     static import breeze.handlearray;
     import std.container;
-    writeln("D: ", DynamicArray!(int).sizeof);
-    writeln("D1: ", Array!(int).sizeof);
-    writeln("D2: ", breeze.handlearray.Array!(int).sizeof);
-    writeln("D3: ",(int[]).sizeof);
-    auto s1 = SOA2!(Vec2, Array)();
+//    writeln("D: ", DynamicArray!(int).sizeof);
+//    writeln("D1: ", Array!(int).sizeof);
+//    writeln("D2: ", breeze.handlearray.Array!(int).sizeof);
+//    writeln("D3: ",(int[]).sizeof);
+//    auto s1 = SOA2!(Vec2, Array)();
 }

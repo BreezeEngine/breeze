@@ -107,7 +107,7 @@ unittest{
     remotePeers.insertBack(RemotePeer(new InternetAddress(1234), Clock.currTime));
 
     import std.container;
-    writeln("end: ", (Array!int).sizeof);
+    //writeln("end: ", (Array!int).sizeof);
 
 
     //    p2.poll;

@@ -45,6 +45,13 @@ struct Vector(T, size_t _dimension){
         data = ts;
     }
 
+    static if(dimension > 1){
+        import std.algorithm.mutation;
+        this(Vector!(T, dimension - 1) v, T value){
+            data = v.data ~ value;
+        }
+    }
+
     ref auto opDispatch(string op)() inout
     if(op.length is 1){
         import std.string: indexOf;
@@ -112,6 +119,11 @@ struct Vector(T, size_t _dimension){
         assert(v5 is Vector!(float, 3)(2,3,4));
     }
 
+    Vector opUnary(string op)() inout
+    if(op is "-"){
+        return this * -1;
+    }
+
     static enum Vector zero(){
         import std.range;
         import std.algorithm.iteration: map;
@@ -122,6 +134,11 @@ struct Vector(T, size_t _dimension){
     }
 }
 
+unittest{
+    auto v1 = Vec2f(1, 0);
+    auto v2 = Vec3f(v1, 1);
+    assert(v2 is Vec3f(1, 0, 1));
+}
 enum isVector(Vec) = __traits(isSame, TemplateOf!(Vec),Vector);
 
 Vec zero(Vec)(){
@@ -346,4 +363,17 @@ if(isVector!Vec && isIntegral!(Vec.Type)){
 unittest{
     auto v1 = Vec2i(1,2);
     assert(v1.equals(v1));
+}
+
+Vec cross(Vec)(const Vec v1, const Vec v2)
+if(isVector!Vec && Vec.dimension is 3){
+    return Vec(v1.y * v2.z - v1.z * v2.y,
+               v1.z * v2.x - v1.x * v2.z,
+               v1.x * v2.y - v1.y * v2.x);
+}
+
+unittest{
+    auto v1 = Vec3f(1, 0, 0);
+    auto v2 = Vec3f(0, 1, 0);
+    assert(v1.cross(v2) is Vec3f(0, 0, 1));
 }
