@@ -6,6 +6,7 @@ import derelict.opengl3.gl3;
 import breeze.graphics.opengl.types;
 import std.meta: allSatisfy;
 import breeze.math.vector;
+import breeze.math.matrix;
 
 struct Shader(ShaderType _shaderType){
     GLuint handle;
@@ -54,8 +55,29 @@ ShaderProgram createShaderProgram(Shader!(ShaderType.Vertex) vs, Shader!(ShaderT
     return ShaderProgram(shaderProgram);
 }
 
-struct TypeSafeShader(Vertex, Fragment){
-  ShaderProgram program;
+struct TypeSafeShader(_Vertex, _Fragment){
+    ShaderProgram program;
+    alias Vertex = _Vertex;
+    alias Fragment = _Fragment;
+    alias Uniform = Vertex.Uniform;
+    void send(string name, T)(const auto ref T value){
+        alias Uniform = Vertex.Uniform;
+        alias VerteXInput = Vertex.Input;
+        auto loc = glGetUniformLocation(program.handle, name);
+        send(loc, value);
+    }
+    void send(GLuint loc, Vec3f v){
+        glUniform3f(loc, v.x, v.y, v.z);
+    }
+    void send(GLuint loc, Vec2f v){
+        glUniform2f(loc, v.x, v.y);
+    }
+    void send(GLuint loc, float f){
+        glUniform1f(loc, f);
+    }
+    void send(GLuint loc, Mat4f m){
+        glUniformMatrix4fv(loc, 1, true, cast(GLfloat*)m.data);
+    }
 }
 
 auto createTypeSafeShader(Vertex, Fragment)(Vertex vertex, Fragment fragment){
@@ -88,6 +110,12 @@ enum toGLSLString(T) = StringTypeGen!(T,
             TypeToString!(Vector!(float, 2), "vec2"),
             TypeToString!(Vector!(float, 3), "vec3"),
             TypeToString!(Vector!(float, 4), "vec4"),
+            TypeToString!(Matrix!(float, 3, 3), "mat3"),
+            TypeToString!(Matrix!(float, 4, 4), "mat4"),
+            TypeToString!(float, "float"),
+            TypeToString!(GLfloat, "float"),
+            TypeToString!(int, "int"),
+            TypeToString!(GLint, "int"),
     );
 auto glslMetaInput(T, bool withLoc)(){
     import std.meta: AliasSeq;
@@ -119,25 +147,41 @@ auto glslMetaOutput(T)(){
     }
     return input;
 }
+auto glslMetaUniform(T)(){
+    import std.meta: AliasSeq;
+    import std.conv: to;
+    alias Members = AliasSeq!(__traits(allMembers, T));
+    alias toType(string s) = typeof(__traits(getMember, T, s));
+    string[Members.length] input;
+    foreach(index, name; Members){
+        alias glslType = toType!name;
+        input[index] = "uniform " ~ toGLSLString!(toType!name) ~ " " ~ name ~";";
+    }
+    return input;
+}
 
-struct VertexShader(Input, Output){
+struct VertexShader(_Input, Output, _Uniform){
+    alias Input = _Input;
+    alias Uniform = _Uniform;
     Shader!(ShaderType.Vertex) shader;
     this(string shaderBody){
         import std.range: join;
         import std.algorithm: map;
         string input = glslMetaInput!(Input, true)[].map!(s => s ~ "\n").join();
         string output = glslMetaOutput!(Output)[].map!(s => s ~ "\n").join();
-        shader = createShader!(ShaderType.Vertex)("#version 330 core\n" ~ input ~ output ~ shaderBody);
+        string uniform = glslMetaUniform!(Uniform)[].map!(s => s ~ "\n").join();
+        shader = createShader!(ShaderType.Vertex)("#version 330 core\n" ~ uniform ~ input ~ output ~ shaderBody);
     }
 }
-struct FragmentShader(Input, Output){
+struct FragmentShader(Input, Output, Uniform){
     Shader!(ShaderType.Fragment) shader;
     this(string shaderBody){
         import std.range: join;
         import std.algorithm: map;
         string input = glslMetaInput!(Input, false)[].map!(s => s ~ "\n").join();
         string output = glslMetaOutput!(Output)[].map!(s => s ~ "\n").join();
-        shader = createShader!(ShaderType.Fragment)("#version 330 core\n" ~ input ~ output ~ shaderBody);
+        string uniform = glslMetaUniform!(Uniform)[].map!(s => s ~ "\n").join();
+        shader = createShader!(ShaderType.Fragment)("#version 330 core\n"~ uniform  ~ input ~ output ~ shaderBody);
     }
 }
 struct Shader(Input, Output){

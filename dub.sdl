@@ -16,6 +16,7 @@ sourceFiles "deps/win64/glfw/glfw3.lib" platform="windows-x86_64"
 subPackage "./examples/ecs"
 subPackage "./examples/opengl"
 subPackage "./examples/soatest"
+subPackage "./examples/openglpers"
 
 targetPath "./bin"
 

@@ -8,7 +8,7 @@ auto rotation2d(Radians _angle){
     import breeze.math.vector;
     import std.math: cos, sin;
     alias Vec2 = Vector!(float,2);
-    return Matrix!(float,2,2)(Vec2( cos(_angle.value), -sin(_angle.value)),
+    return Matrix!(float,2,2)(Vec2(cos(_angle.value), -sin(_angle.value)),
                               Vec2(sin(_angle.value), cos(_angle.value)));
 }
 
@@ -22,13 +22,15 @@ if(isVector!Vec && Vec.dimension is 3){
     return Mat(Vec4(x, 0),
                Vec4(y, 0),
                Vec4(z, 0),
-               Vec4(0, 0, 0, 1)) * translate(-eye);
+               Vec4(0, 0, 0, 1)) * translate(eye);
+    //return Mat(Vec4(x, eye.x),
+    //           Vec4(y, eye.y),
+    //           Vec4(z, eye.z),
+    //           Vec4(0, 0, 0, 1));
 }
 unittest{
     import breeze.math.vector;
-    auto v1 = Vec3f(1, 1 ,1);
-    auto v2 = Vec3f(2, 1 ,1);
-    writeln(lookAt(v1, v2, v1));
+    writeln(lookAt(Vec3f(0, 0, 10), Vec3f(0, 0, 0), Vec3f(0, 1, 0)));
 }
 auto translate(Vec)(const Vec dir){
     auto mat = Mat4f.identity();
@@ -106,6 +108,15 @@ struct Matrix(T, size_t _rows, size_t _colums){
     if(op is "*"){
         return mul(other);
     }
+
+    string toString(){
+      string s = "Mat\n";
+      import std.conv;
+      foreach(v; data){
+        s~= v.toString ~ "\n";
+      }
+      return s;
+    }
 }
 
 /*
@@ -120,6 +131,30 @@ Matrix!(float, 4, 4) ortho(float left, float right, float bottom, float top, flo
             Vec4f(0, 0, -2/(far - near),  -(far + near)/(far - near)),
             Vec4f(0, 0, 0, 1)
     );
+}
+
+Mat4f projection(float fovY, float ar, float near, float far){
+  import std.math: tan;
+  return Mat4f(
+      Vec4f(1 / ar * tan(fovY), 0, 0, 0),
+      Vec4f(0, 1 / tan(fovY), 0, 0),
+      Vec4f(0, 0, (-near - far) / (near - far), (2 * far * near) / (near - far)),
+      Vec4f(0, 0, 1, 0));
+}
+
+Mat4f rotZ(float angle){
+  import std.math: cos, sin;
+  return Mat4f(Vec4f(cos(angle), 0, sin(angle), 0),
+               Vec4f(0, 1, 0, 0),
+               Vec4f(-sin(angle), 0, cos(angle), 0),
+               Vec4f(0, 0, 0, 1));
+}
+Mat4f rotY(float angle){
+  import std.math: cos, sin;
+  return Mat4f(Vec4f(cos(angle),-sin(angle), 0, 0),
+               Vec4f(sin(angle), cos(angle), 0, 0),
+               Vec4f(0, 0, 1, 0),
+               Vec4f(0, 0, 0, 1));
 }
 unittest{
     import breeze.math.vector;

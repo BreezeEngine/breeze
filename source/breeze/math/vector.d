@@ -132,6 +132,13 @@ struct Vector(T, size_t _dimension){
         fill(_data[],0);
         return Vector!(T, dimension)(_data);
     }
+    string toString(){
+      string s = "Vec(";
+      import std.range;
+      import std.algorithm.iteration;
+      import std.conv;
+      return "Vec(" ~ data[].map!(val => val.to!string).join(", ") ~ ")";
+    }
 }
 
 unittest{

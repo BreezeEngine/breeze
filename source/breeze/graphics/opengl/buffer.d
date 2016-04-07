@@ -98,12 +98,23 @@ void draw(T)(ref VertexBuffer!T buffer, DrawMode drawMode){
     glDrawArrays(drawMode, 0, cast(GLsizei)buffer.elements);
     glBindVertexArray(0);
 }
-void draw(T,E)(ref VertexBuffer!T buffer, ElementBuffer!E ebo, DrawMode drawMode){
+void draw(T,E)(ref VertexBuffer!T buffer,ref ElementBuffer!E ebo, DrawMode drawMode){
     glBindVertexArray(buffer.vao);
     ebo.bind();
     glDrawElements(drawMode, cast(GLsizei)ebo.elements, GL_UNSIGNED_INT, null);
     glBindVertexArray(0);
     ebo.unbind();
+}
+
+void draw(Shader, Vbo, Ebo, Uniform)(ref Shader shader, ref Vbo vbo, ref Ebo ebo, DrawMode drawMode, const auto ref Uniform uniform){
+    import std.meta: AliasSeq;
+    static assert(is(Vbo == VertexBuffer!(Shader.Vertex.Input)));
+    alias Members = AliasSeq!(__traits(allMembers, Uniform));
+    glUseProgram(shader.program.handle);
+    foreach(name; Members){
+       shader.send!name(__traits(getMember, uniform, name));
+    }
+    draw(vbo, ebo, drawMode);
 }
 
 

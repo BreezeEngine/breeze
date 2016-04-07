@@ -52,5 +52,5 @@ struct Obj{
 }
 unittest{
     import std.stdio;
-    auto obj = Obj("/home/maik/projects/breeze/test.obj");
+    //auto obj = Obj("/home/maik/projects/breeze/test.obj");
 }

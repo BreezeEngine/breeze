@@ -8,9 +8,29 @@ extern(C) void key_callback(GLFWwindow* window, int key, int scancode, int actio
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GL_TRUE);
 }
+static immutable string vertex = q{
+  #version 330 core
+  layout (location = 0) in vec3 pos;
+  layout (location = 1) in vec3 col;
+  out vec3 vs_col;
+  void main(){
+    gl_Position = vec4(pos.x, pos.y, pos.z, 1);
+    vs_col = col;
+  }
+};
+static immutable string fragment = q{
+  #version 330 core
+  in vec3 vs_col;
+  out vec4 color;
+  void main(){
+    color = vec4(vs_col, 1);
+  }
+};
+
 
 void main()
 {
+
     import std.meta;
     import breeze.graphics.opengl.shader;
     import breeze.graphics.opengl.types;
@@ -18,8 +38,6 @@ void main()
     import breeze.math.vector;
     import std.conv;
     import std.range;
-    import breeze.math.matrix;
-    import std.math;
 
     DerelictGL3.load();
     glfwInit();
@@ -44,18 +62,10 @@ void main()
 
     // Define the viewport dimensions
     glViewport(0, 0, 800, 600);
-    glEnable(GL_DEPTH_TEST);
 
     struct Vertex{
         Vec3f position;
-        Vec2f uv;
-    }
-
-    struct Uniforms{
-        Vec3f ucolor;
-        Mat4f uproj;
-        Mat4f uview;
-        Mat4f umodel;
+        Vec3f color;
     }
 
     alias VertexInput = Vertex;
@@ -72,64 +82,53 @@ void main()
 
     import breeze.graphics.opengl.shader;
     import std.string;
-    import breeze.graphics.primitives: Cube;
 
     string vertexBody = q{
         void main(){
-            gl_Position = uproj * uview * umodel * vec4(position, 1);
-            out_color = vec3(uv, 0);
+          gl_Position = vec4(position.x, position.y, position.z, 1);
+          out_color = color;
         }
     }.outdent;
 
-    auto vs = VertexShader!(Cube.VertexInput, VertexOutput, Uniforms)(vertexBody);
+    auto vs = VertexShader!(VertexInput, VertexOutput)(vertexBody);
 
     static immutable string fragmentBody = q{
         void main(){
-            frag_color = vec4(out_color, 1);
+          frag_color = vec4(out_color, 1);
         }
     }.outdent;
 
-    auto fs = FragmentShader!(FragmentInput, FragmentOutput, Uniforms)(fragmentBody);
+    auto fs = FragmentShader!(FragmentInput, FragmentOutput)(fragmentBody);
 
     auto shader = createTypeSafeShader(vs, fs);
 
     Vertex[4] v2 = [
-        Vertex(Vec3f(0.5f, 0.5, 0.0f),  Vec2f(1.0f, 0.0f)),
-        Vertex(Vec3f(0.5f, -0.5, 0.0f), Vec2f(0.0f, 1.0f)),
-        Vertex(Vec3f(-0.5f, -0.5, 0.0f),Vec2f(0.0f, 0.0f)),
-        Vertex(Vec3f(-0.5f, 0.5, 0.0f), Vec2f(1.0f, 0.0f))
+        Vertex(Vec3f(0.5f, 0.5, 0.0f), Vec3f(1.0f, 0.0f, 0.0f)),
+        Vertex(Vec3f(0.5f, -0.5, 0.0f),Vec3f(0.0f, 1.0f, 0.0f)),
+        Vertex(Vec3f(-0.5f, -0.5, 0.0f),Vec3f(0.0f, 0.0f, 1.0f)),
+        Vertex(Vec3f(-0.5f, 0.5, 0.0f),Vec3f(1.0f, 0.0f, 1.0f))
     ];
-    GLuint[6] indices = [
-        0, 1, 3,  // First Triangle
-        1, 2, 3   // Second Triangle
+    GLuint[6] indices = [  // Note that we start from 0!
+      0, 1, 3,  // First Triangle
+      1, 2, 3   // Second Triangle
     ];
     import std.container: Array;
     Array!int indices2 = [  // Note that we start from 0!
-        0, 1, 3,  // First Triangle
-        1, 2, 3   // Second Triangle
+      0, 1, 3,  // First Triangle
+      1, 2, 3   // Second Triangle
     ];
 
     auto vertexBuffer = createVertexBuffer(v2);
 
-    auto vertexBuffer2 = createVertexBuffer(Cube.data);
-    auto ebo2 = createElementBuffer(Cube.indices[]);
-
-    auto view = lookAt(Vec3f(0, 0, 10), Vec3f(0, 0, 0), Vec3f(0, 1, 0));
-    writeln((view));
-    //auto view = translate(Vec3f(0, 0, 2));
-    auto proj = projection(PI/4, 4.0f/3.0f, 0.1f, 100);
-    import std.range;
     import std.conv;
     auto ebo = createElementBuffer(indices[]);
-    float frame = 0.0f;
     while (!glfwWindowShouldClose(window)){
         glfwPollEvents();
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT);
 
-        draw(shader, vertexBuffer2, ebo2, DrawMode.Triangles, Uniforms(Vec3f(1, 0, 0), proj, view, rotZ(frame)));
-        //frame += 0.01;
-        //draw(shader, vertexBuffer, ebo, DrawMode.Triangles, Uniforms(Vec3f(1, 0, 0), 1.0f));
+        glUseProgram(shader.program.handle);
+        draw(vertexBuffer, ebo, DrawMode.Triangles);
 
         glfwSwapBuffers(window);
     }

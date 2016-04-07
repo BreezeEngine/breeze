@@ -1,0 +1,5 @@
+name "openglpers"
+dependency "breeze" version="*"
+
+
+targetPath "../../bin"

@@ -20,6 +20,6 @@ enum PrimitiveType{
 enum DrawMode{
     Triangles = GL_TRIANGLES,
     Line = GL_LINE,
-    Points = GL_POINTS
+    Points = GL_POINTS,
 }
 
