@@ -12,25 +12,32 @@ auto rotation2d(Radians _angle){
                               Vec2(sin(_angle.value), cos(_angle.value)));
 }
 
+Mat4f projection(float fov, float ar, float near, float far){
+  import std.math: tan;
+  auto tanHalfAngle = tan(fov/2.0f);
+  return Mat4f(
+      Vec4f(1.0f / (ar * tanHalfAngle) , 0, 0, 0),
+      Vec4f(0, 1.0f / tanHalfAngle, 0, 0),
+      Vec4f(0, 0, (-far - near) / (far - near), (-2 * far * near) / (far - near)),
+      Vec4f(0, 0, -1, 0));
+}
+
 auto lookAt(Vec)(const Vec eye, const Vec center, const Vec up)
 if(isVector!Vec && Vec.dimension is 3){
     auto z = (eye - center).unit;
-    auto y = up.unit;
-    auto x = y.cross(z);
+    auto x = cross(up.unit, z);
+    auto y = cross(z, x);
     alias Mat = Matrix!(Vec.Type, 4, 4);
     alias Vec4 = Vector!(Vec.Type, 4);
-    return Mat(Vec4(x, 0),
-               Vec4(y, 0),
-               Vec4(z, 0),
-               Vec4(0, 0, 0, 1)) * translate(eye);
-    //return Mat(Vec4(x, eye.x),
-    //           Vec4(y, eye.y),
-    //           Vec4(z, eye.z),
-    //           Vec4(0, 0, 0, 1));
+    return Mat(
+        Vec4(x, 0),
+        Vec4(y, 0),
+        Vec4(z, 0),
+        Vec4(0, 0, 0, 1)) * translate(-eye);
 }
 unittest{
     import breeze.math.vector;
-    writeln(lookAt(Vec3f(0, 0, 10), Vec3f(0, 0, 0), Vec3f(0, 1, 0)));
+    auto m = lookAt(Vec3f(0, 0, 0), Vec3f(-1, 0, -1), Vec3f(0, 1, 0));
 }
 auto translate(Vec)(const Vec dir){
     auto mat = Mat4f.identity();
@@ -133,23 +140,15 @@ Matrix!(float, 4, 4) ortho(float left, float right, float bottom, float top, flo
     );
 }
 
-Mat4f projection(float fovY, float ar, float near, float far){
-  import std.math: tan;
-  return Mat4f(
-      Vec4f(1 / ar * tan(fovY), 0, 0, 0),
-      Vec4f(0, 1 / tan(fovY), 0, 0),
-      Vec4f(0, 0, (-near - far) / (near - far), (2 * far * near) / (near - far)),
-      Vec4f(0, 0, 1, 0));
-}
 
-Mat4f rotZ(float angle){
+Mat4f rotY(float angle){
   import std.math: cos, sin;
   return Mat4f(Vec4f(cos(angle), 0, sin(angle), 0),
                Vec4f(0, 1, 0, 0),
                Vec4f(-sin(angle), 0, cos(angle), 0),
                Vec4f(0, 0, 0, 1));
 }
-Mat4f rotY(float angle){
+Mat4f rotZ(float angle){
   import std.math: cos, sin;
   return Mat4f(Vec4f(cos(angle),-sin(angle), 0, 0),
                Vec4f(sin(angle), cos(angle), 0, 0),

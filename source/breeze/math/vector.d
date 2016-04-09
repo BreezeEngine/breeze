@@ -26,6 +26,19 @@ alias Vec3d = Vector!(double, 3);
 
 alias Vec2i = Vector!(int, 2);
 
+struct UnitVector(T, size_t _dimension){
+    Vector!(T, _dimension) vector;
+    alias vector this;
+}
+auto unit2(Vec)(Vec v){
+    auto length = v.length;
+    assert(v.length !is 0);
+    return UnitVector!(Vec.Type, Vec.dimension)(v / length);
+}
+unittest{
+    auto v = unit2(Vec3f(2, 0, 0));
+    writeln(v * 2);
+}
 struct Vector(T, size_t _dimension){
     import breeze.math.units;
 
