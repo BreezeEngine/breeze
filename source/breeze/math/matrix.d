@@ -25,8 +25,8 @@ Mat4f projection(float fov, float ar, float near, float far){
 auto lookAt(Vec)(const Vec eye, const Vec center, const Vec up)
 if(isVector!Vec && Vec.dimension is 3){
     auto z = (eye - center).unit;
-    auto x = cross(up.unit, z);
-    auto y = cross(z, x);
+    auto x = cross(up.unit, z).unit;
+    auto y = cross(z, x).unit;
     alias Mat = Matrix!(Vec.Type, 4, 4);
     alias Vec4 = Vector!(Vec.Type, 4);
     return Mat(
@@ -141,6 +141,14 @@ Matrix!(float, 4, 4) ortho(float left, float right, float bottom, float top, flo
 }
 
 
+Mat4f rotX(float angle){
+  import std.math: cos, sin;
+  return Mat4f(
+               Vec4f(1, 0, 0, 0),
+               Vec4f(0, cos(angle), -sin(angle), 0),
+               Vec4f(0, sin(angle), cos(angle), 0),
+               Vec4f(0, 0, 0, 1));
+}
 Mat4f rotY(float angle){
   import std.math: cos, sin;
   return Mat4f(Vec4f(cos(angle), 0, sin(angle), 0),

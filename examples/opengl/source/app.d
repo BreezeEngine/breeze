@@ -59,20 +59,49 @@ struct Window{
 struct FPCamera{
   import breeze.math.matrix;
   import breeze.math.vector;
+        import breeze.math.units;
+  alias Input = InputMap!(Axis!("Forward", "Right"), Action!("Exit"));
+  Input input;
   Window* window;
   Vec3f position;
-  Vec3f direction;
+
+  Vec3f forward = Vec3f(0, 0, -1);
+  Vec3f up = Vec3f(0, 1, 0);
+
+  Degrees xAngle;
+  Degrees yAngle;
 
   this(Window* w, Vec3f _position, Vec3f _direction){
     window = w;
     position = _position;
-    direction = _direction;
+    xAngle = Degrees(0);
+    yAngle = Degrees(0);
+    input = Input(w);
+    input.axis!"Forward"(
+        AxisState(GLFW_KEY_W, 1.0f),
+        AxisState(GLFW_KEY_S, -1.0f)
+    );
+    input.axis!"Right"(
+        AxisState(GLFW_KEY_D, 1.0f),
+        AxisState(GLFW_KEY_A, -1.0f)
+    );
   }
   Mat4f calcView(){
-        auto mouseDelta = window.getDeltaMousePos / window.height;
-        auto newDir = rotY((mouseDelta.x)) * Vec4f(direction, 1) ;
-        direction = newDir.xyz;
-        auto view = lookAt(position, position + direction, Vec3f(0, 1, 0));
+        auto mouseDelta = window.getDeltaMousePos * 50 / window.height;
+        xAngle += Degrees(mouseDelta.x);
+        yAngle += Degrees(mouseDelta.y);
+        import std.algorithm.comparison: clamp;
+        yAngle = Degrees(clamp(yAngle.value, -89.5, 89.5));
+        auto newDir = rotY(Radians(xAngle).value) * rotX(Radians(yAngle).value) * Vec4f(forward, 1) ;
+        auto direction = newDir.xyz;
+        auto right = (rotY(Radians(xAngle).value) * Vec4f(1, 0, 0, 1)).xyz;
+        auto fwd = input.getAxis!"Forward";
+        auto rt = input.getAxis!"Right";
+        position = position + direction * fwd * 0.05f;
+        position = position + right * rt * 0.05f;
+
+        writeln(direction);
+        auto view = lookAt(position, position + direction, up);
         return view;
   }
 }
@@ -156,7 +185,7 @@ void main()
     import std.math;
     import std.string;
 
-    Window w = Window(800, 600, "Test");
+    Window w = Window(1920, 1080, "Test");
     auto input = InputMap!(Axis!("Forward", "Right"), Action!("Exit"))(&w);
     input.action!"Exit"(GLFW_KEY_ESCAPE);
     input.axis!"Forward"(
@@ -215,7 +244,8 @@ void main()
     auto ebo = createElementBuffer(Cube.indices[]);
 
     //auto view = Mat4f.identity;
-    auto proj = projection(PI/2, 4.0f/3.0f, 0.1f, 100);
+    import breeze.math.units;
+    auto proj = projection(Radians(Degrees(102)).value, 4.0f/3.0f, 0.1f, 100);
     float frame = 0.0f;
     glfwSetInputMode(w.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     auto cam = FPCamera(&w, Vec3f(0, 0, 2), Vec3f(0, 0, -1));
@@ -225,10 +255,10 @@ void main()
         }
         float fwd = input.getAxis!"Forward";
         float right = input.getAxis!"Right";
-        writeln(w.getDeltaMousePos);
+        //writeln(w.getDeltaMousePos);
         auto view = cam.calcView();
-        //auto view = lookAt(Vec3f(0, 0, 2), Vec3f(0, 0, 0), Vec3f(0, 1, 0));
-        draw(shader, vertexBuffer, ebo, DrawMode.Triangles, Uniforms(proj, view, rotY(frame)));
+        //auto view = lookAt(Vec3f(0, 0, 2), Vec3f(0, 2, 0), Vec3f(0, 1, 0));
+        draw(shader, vertexBuffer, ebo, DrawMode.Triangles, Uniforms(proj, view, rotX(frame)));
         frame += 0.01f;
     });
 }
