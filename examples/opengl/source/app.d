@@ -56,6 +56,26 @@ struct Window{
         return glfwGetKey(window, key) == GLFW_PRESS;
     }
 }
+enum Key{
+    w,
+    a,
+    s,
+    d,
+    f1,
+    f2,
+    f3
+}
+
+import option;
+Option!Key getKeyFromString(string keyName){
+    import std.string: toLower;
+    foreach(_keyName; __traits(allMembers, Key)){
+        if(keyName.toLower is _keyName){
+            return some(__traits(getMember, Key, _keyName));
+        }
+    }
+    return none!Key;
+}
 struct FPCamera{
   import breeze.math.matrix;
   import breeze.math.vector;
@@ -100,7 +120,7 @@ struct FPCamera{
         position = position + direction * fwd * 0.05f;
         position = position + right * rt * 0.05f;
 
-        writeln(direction);
+        //writeln(direction);
         auto view = lookAt(position, position + direction, up);
         return view;
   }
@@ -185,8 +205,10 @@ void main()
     import std.math;
     import std.string;
 
+    writeln(getKeyFromString("f3"));
     Window w = Window(1920, 1080, "Test");
-    auto input = InputMap!(Axis!("Forward", "Right"), Action!("Exit"))(&w);
+    auto input = InputMap!(Axis!("Forward", "Right")
+                          ,Action!("Exit"))(&w);
     input.action!"Exit"(GLFW_KEY_ESCAPE);
     input.axis!"Forward"(
         AxisState(GLFW_KEY_W, 1.0f),
@@ -199,6 +221,7 @@ void main()
 
     struct Vertex{
         Vec3f position;
+        Vec3f normal;
         Vec2f uv;
     }
 
@@ -228,7 +251,7 @@ void main()
         }
     }.outdent;
 
-    auto vs = VertexShader!(Cube.VertexInput, VertexOutput, Uniforms)(vertexBody);
+    auto vs = VertexShader!(VertexInput, VertexOutput, Uniforms)(vertexBody);
 
     static immutable string fragmentBody = q{
         void main(){
@@ -240,7 +263,7 @@ void main()
 
     auto shader = createTypeSafeShader(vs, fs);
 
-    auto vertexBuffer = createVertexBuffer(Cube.data);
+    auto vertexBuffer = createVertexBuffer(Cube.data[]);
     auto ebo = createElementBuffer(Cube.indices[]);
 
     //auto view = Mat4f.identity;
@@ -249,6 +272,11 @@ void main()
     float frame = 0.0f;
     glfwSetInputMode(w.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     auto cam = FPCamera(&w, Vec3f(0, 0, 2), Vec3f(0, 0, -1));
+    import breeze.util.obj;
+    import containers.dynamicarray;
+    DynamicArray!Mesh mesh = parsObj("/home/maik/projects/breeze/bin/cube.obj");
+    auto vertexBuffer2 = createVertexBuffer!Mesh(mesh[]);
+    writeln(mesh[]);
     w.mainLoop((ref w){
         if (input.getAction!"Exit"){
             glfwSetWindowShouldClose(w.window, true);
@@ -258,7 +286,7 @@ void main()
         //writeln(w.getDeltaMousePos);
         auto view = cam.calcView();
         //auto view = lookAt(Vec3f(0, 0, 2), Vec3f(0, 2, 0), Vec3f(0, 1, 0));
-        draw(shader, vertexBuffer, ebo, DrawMode.Triangles, Uniforms(proj, view, rotX(frame)));
+        draw(shader, vertexBuffer2, DrawMode.Triangles, Uniforms(proj, view, rotX(frame)));
         frame += 0.01f;
     });
 }

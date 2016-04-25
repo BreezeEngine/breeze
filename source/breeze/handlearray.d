@@ -16,6 +16,13 @@ struct ArrayRange(T){
     ref auto front(){
         return array.access(current);
     }
+    ref auto back(){
+        return array.access(array.length - 1);
+    }
+
+    ref auto opIndex(size_t index){
+        return array.access(index);
+    }
 }
 struct Array(T)
 if(!is(T == class))
@@ -62,14 +69,17 @@ if(!is(T == class))
         }
         size = newSize;
     }
-    void insertBack(T value){
+    void insert(T value){
         import std.algorithm.mutation;
         if(length == size){
             grow();
         }
-        data[length] = move(value);
+        data[length] = value;
         length += 1;
     }
+
+    alias insertBack = insert;
+
     void emplaceBack(Args...)(auto ref Args args){
         if(length == size){
             grow();
@@ -80,16 +90,40 @@ if(!is(T == class))
     ref T access(size_t index){
         return (data)[index];
     }
+    ArrayRange!Array opIndex(){
+        return ArrayRange!Array(&this);
+    }
     ref T opIndex(size_t index){
         return access(index);
     }
     void swap(size_t i1, size_t i2){
-        import std.algorithm.mutation;
-        swap(data[i1], data[i2]);
+        static import std.algorithm.mutation;
+        std.algorithm.mutation.swap(data[i1], data[i2]);
     }
+
+    ref T back(){
+        return access(length - 1);
+    }
+
+    void remove(size_t index){
+        assert(index < length);
+        if(index is length -1){
+            removeLast();
+        }
+        else{
+           swap(index, length - 1);
+           removeLast();
+        }
+    }
+
+    alias removeBack = removeLast;
     void removeLast(){
         length -= 1;
         data[length].destroy();
+    }
+
+    bool empty(){
+        return length is 0;
     }
 }
 struct Handle(T){

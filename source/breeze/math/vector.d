@@ -37,7 +37,6 @@ auto unit2(Vec)(Vec v){
 }
 unittest{
     auto v = unit2(Vec3f(2, 0, 0));
-    writeln(v * 2);
 }
 struct Vector(T, size_t _dimension){
     import breeze.math.units;

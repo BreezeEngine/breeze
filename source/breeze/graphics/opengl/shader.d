@@ -89,7 +89,8 @@ struct TypeToString(T, string s){
     alias Type = T;
     static immutable stringType = s;
 }
-enum isTypeToString(T) = std.traits.isInstanceOf!(TypeToString,T);
+import std.traits: isInstanceOf;
+enum isTypeToString(T) = isInstanceOf!(TypeToString,T);
 template StringTypeGen(T, ShaderTypes...)
   if(allSatisfy!(isTypeToString, ShaderTypes)
      && ShaderTypes.length > 0)

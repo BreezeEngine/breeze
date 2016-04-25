@@ -31,15 +31,16 @@ auto createElementBuffer(T)(const auto ref Array!T data){
     return createElementBufferImpl(data);
 }
 
-template structToTypes(T){
-    import std.meta;
-    alias Members = AliasSeq!(__traits(allMembers, T));
-    alias toType(string s) = typeof(__traits(getMember, T, s));
-    alias structToTypes = staticMap!(toType, Members);
-}
+//template structToTypes(T){
+//    import std.meta;
+//    alias Members = AliasSeq!(__traits(allMembers, T));
+//    alias toType(string s) = typeof(__traits(getMember, T, s));
+//    alias structToTypes = staticMap!(toType, Members);
+//}
 
 
 struct VertexBuffer(T){
+    import containers.dynamicarray;
     GLuint vao;
     GLuint vbo;
     size_t elements;
@@ -61,10 +62,47 @@ uint numberOfelements(T)(T)
 if(isIntegral!T || isFloatingPoint!T){
     return 1;
 }
-auto createVertexBuffer(size_t size, T)(const auto ref T[size] data){
+//auto createVertexBuffer(T, Args...)(const auto ref Args args){
+//    import std.range;
+//    import std.algorithm.iteration;
+//    ulong[Args.length] offsets;
+//    foreach(index, ref container; args){
+//        alias Type = ReturnType!(container.front);
+//        offsets[index] = container.length * Type.sizeof;
+//    }
+//    import std.traits: ReturnType;
+//    GLuint _vao;
+//    glGenVertexArrays(1, &_vao);
+//
+//    glBindVertexArray(_vao);
+//    GLuint _vbo;
+//    glGenBuffers(1, &_vbo);
+//
+//    glBindBuffer(GL_ARRAY_BUFFER, _vbo);
+//    glBufferData(GL_ARRAY_BUFFER, offsets[].sum, null, GL_STATIC_DRAW);
+//
+//    foreach(index, ref container; args){
+//        writeln(offsets[0 .. index]);
+//        glBufferSubData(GL_ARRAY_BUFFER, offsets[0 .. index].sum, offsets[index], container.ptr);
+//
+//        alias Type = ReturnType!(container.front);
+//        glEnableVertexAttribArray(index);
+//        glVertexAttribPointer(cast(uint)index
+//                             ,cast(int)container.length
+//                             ,GL_FLOAT, GL_FALSE
+//                             ,cast(int)offsets[index]
+//                             ,cast(GLvoid*)(offsets[0 .. index].sum));
+//    }
+//    glBindBuffer(GL_ARRAY_BUFFER, 0);
+//    glBindVertexArray(0);
+//}
+auto createVertexBuffer(T)(const auto ref T[] data){
     import std.meta;
 
-    alias Members = AliasSeq!(__traits(allMembers, T));
+    import std.traits: FieldNameTuple;
+    alias Members = FieldNameTuple!T;
+    //Broken report?
+    //alias Members = AliasSeq!(__traits(allMembers, T));
     alias toType(string s) = typeof(__traits(getMember, T, s));
     enum toOffset(string s) = __traits(getMember, T, s).offsetof;
 
@@ -78,11 +116,12 @@ auto createVertexBuffer(size_t size, T)(const auto ref T[size] data){
     glGenBuffers(1, &_vbo);
 
     glBindBuffer(GL_ARRAY_BUFFER, _vbo);
-    glBufferData(GL_ARRAY_BUFFER, data.sizeof, &data, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, T.sizeof * data.length, data.ptr, GL_STATIC_DRAW);
 
     foreach(index, type; Types){
         glEnableVertexAttribArray(index);
         enum elements = numberOfelements(type.init);
+        writeln("size ", T.sizeof);
         glVertexAttribPointer(index, elements, GL_FLOAT, GL_FALSE, T.sizeof, cast(GLvoid*)(offsets[index]));
     }
 
@@ -106,9 +145,19 @@ void draw(T,E)(ref VertexBuffer!T buffer,ref ElementBuffer!E ebo, DrawMode drawM
     ebo.unbind();
 }
 
+void draw(Shader, Vbo, Uniform)(ref Shader shader, ref Vbo vbo,DrawMode drawMode, const auto ref Uniform uniform){
+    import std.meta: AliasSeq;
+    //static assert(is(Vbo == VertexBuffer!(Shader.Vertex.Input)));
+    alias Members = AliasSeq!(__traits(allMembers, Uniform));
+    glUseProgram(shader.program.handle);
+    foreach(name; Members){
+       shader.send!name(__traits(getMember, uniform, name));
+    }
+    draw(vbo, drawMode);
+}
 void draw(Shader, Vbo, Ebo, Uniform)(ref Shader shader, ref Vbo vbo, ref Ebo ebo, DrawMode drawMode, const auto ref Uniform uniform){
     import std.meta: AliasSeq;
-    static assert(is(Vbo == VertexBuffer!(Shader.Vertex.Input)));
+    //static assert(is(Vbo == VertexBuffer!(Shader.Vertex.Input)));
     alias Members = AliasSeq!(__traits(allMembers, Uniform));
     glUseProgram(shader.program.handle);
     foreach(name; Members){
