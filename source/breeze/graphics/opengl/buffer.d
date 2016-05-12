@@ -121,7 +121,6 @@ auto createVertexBuffer(T)(const auto ref T[] data){
     foreach(index, type; Types){
         glEnableVertexAttribArray(index);
         enum elements = numberOfelements(type.init);
-        writeln("size ", T.sizeof);
         glVertexAttribPointer(index, elements, GL_FLOAT, GL_FALSE, T.sizeof, cast(GLvoid*)(offsets[index]));
     }
 

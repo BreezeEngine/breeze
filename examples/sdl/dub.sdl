@@ -1,0 +1,5 @@
+name "sdl"
+dependency "breeze" version="*"
+
+
+targetPath "../../bin"

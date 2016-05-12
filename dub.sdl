@@ -17,6 +17,7 @@ subPackage "./examples/ecs"
 subPackage "./examples/opengl"
 subPackage "./examples/soatest"
 subPackage "./examples/openglpers"
+subPackage "./examples/sdl"
 
 targetPath "./bin"
 

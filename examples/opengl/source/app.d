@@ -3,80 +3,9 @@ import derelict.glfw3.glfw3;
 import derelict.opengl3.gl3;
 import std.regex;
 
-struct Window{
-      import breeze.math.vector;
-    GLFWwindow* window;
-    Vec2d lastMousePos;
-    int width, height;
-    this(int _width, int _height, string title){
-        height = _height;
-        width = _width;
-        DerelictGL3.load();
-        glfwInit();
-        // Set all the required options for GLFW
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_RESIZABLE, false);
 
-        // Create a GLFWwindow object that we can use for GLFW's functions
-        window = glfwCreateWindow(width, height, title.ptr, null, null);
-        glfwMakeContextCurrent(window);
-        DerelictGL3.reload;
-
-        // Define the viewport dimensions
-        glViewport(0, 0, width, height);
-        glEnable(GL_DEPTH_TEST);
-        glEnable(GL_CULL_FACE);
-    }
-    auto getMousePos(){
-      double x = void;
-      double y = void;
-      glfwGetCursorPos(window, &x, &y);
-      return Vec2d(x, y);
-    }
-    auto ref getLastMousePos(){
-      return lastMousePos;
-    }
-    auto getDeltaMousePos(){
-      return lastMousePos - getMousePos();
-    }
-    void mainLoop(void delegate(ref Window) f){
-        while (!glfwWindowShouldClose(window)){
-            glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-            f(this);
-            lastMousePos = getMousePos();
-            glfwPollEvents();
-            glfwSwapBuffers(window);
-        }
-    }
-    bool getKey(int key){
-        return glfwGetKey(window, key) == GLFW_PRESS;
-    }
-}
-enum Key{
-    w,
-    a,
-    s,
-    d,
-    f1,
-    f2,
-    f3
-}
-
-import option;
-Option!Key getKeyFromString(string keyName){
-    import std.string: toLower;
-    foreach(_keyName; __traits(allMembers, Key)){
-        if(keyName.toLower is _keyName){
-            return some(__traits(getMember, Key, _keyName));
-        }
-    }
-    return none!Key;
-}
 struct FPCamera{
+    import breeze.input;
   import breeze.math.matrix;
   import breeze.math.vector;
         import breeze.math.units;
@@ -98,12 +27,12 @@ struct FPCamera{
     yAngle = Degrees(0);
     input = Input(w);
     input.axis!"Forward"(
-        AxisState(GLFW_KEY_W, 1.0f),
-        AxisState(GLFW_KEY_S, -1.0f)
+        AxisState(Key.w, 1.0f),
+        AxisState(Key.s, -1.0f)
     );
     input.axis!"Right"(
-        AxisState(GLFW_KEY_D, 1.0f),
-        AxisState(GLFW_KEY_A, -1.0f)
+        AxisState(Key.d, 1.0f),
+        AxisState(Key.a, -1.0f)
     );
   }
   Mat4f calcView(){
@@ -125,72 +54,6 @@ struct FPCamera{
         return view;
   }
 }
-struct AxisState{
-    int key;
-    float value;
-}
-struct Axis(_names...){
-    alias names = _names;
-}
-struct Action(_names...){
-    alias names = _names;
-}
-struct InputMap(Axis,Action){
-    import option;
-    import std.container: Array;
-
-    Window* window;
-    Array!AxisState[Axis.names.length] keys;
-    Array!int[Action.names.length] actionBindings;
-    void axis(string name, AxisState...)(AxisState axisStates){
-        import std.meta: staticIndexOf;
-        enum index = staticIndexOf!(name, Axis.names);
-        foreach(axisState; axisStates){
-            keys[index].insert(axisState);
-        }
-    }
-    float getAxis(string name)(){
-        import std.range;
-        import std.meta: staticIndexOf;
-        import std.algorithm.iteration: reduce;
-        enum index = staticIndexOf!(name, Axis.names);
-        float value = reduce!((acc, axisState){
-            if(window.getKey(axisState.key)){
-                return acc + axisState.value;
-            }
-            return acc;
-        })(0.0f, keys[index]);
-        import std.algorithm.comparison: max, min;
-        return value;
-    }
-    void action(string name, Keys...)(Keys keys){
-        import std.meta: staticIndexOf;
-        enum index = staticIndexOf!(name, Action.names);
-        foreach(key; keys){
-            actionBindings[index].insert(key);
-        }
-    }
-    bool getAction(string name)(){
-        import std.range;
-        import std.meta: staticIndexOf;
-        import std.algorithm.iteration: reduce;
-        enum index = staticIndexOf!(name, Action.names);
-        foreach(key; actionBindings[index]){
-            if(window.getKey(key)){
-                return true;
-            }
-        }
-        return false;
-    }
-    bool getKey(string name)(){
-        //import std.meta: staticIndexOf;
-        //enum index = staticIndexOf!(name, names);
-        //return window.getKey(keys[index]);
-        return true;
-    }
-
-
-}
 void main()
 {
     import std.meta;
@@ -204,20 +67,13 @@ void main()
     import breeze.math.matrix;
     import std.math;
     import std.string;
+    import breeze.input;
 
     writeln(getKeyFromString("f3"));
     Window w = Window(1920, 1080, "Test");
     auto input = InputMap!(Axis!("Forward", "Right")
                           ,Action!("Exit"))(&w);
-    input.action!"Exit"(GLFW_KEY_ESCAPE);
-    input.axis!"Forward"(
-        AxisState(GLFW_KEY_W, 1.0f),
-        AxisState(GLFW_KEY_S, -1.0f)
-    );
-    input.axis!"Right"(
-        AxisState(GLFW_KEY_D, 1.0f),
-        AxisState(GLFW_KEY_A, -1.0f)
-    );
+    input.action!"Exit"(Key.escape);
 
     struct Vertex{
         Vec3f position;
@@ -274,9 +130,8 @@ void main()
     auto cam = FPCamera(&w, Vec3f(0, 0, 2), Vec3f(0, 0, -1));
     import breeze.util.obj;
     import containers.dynamicarray;
-    DynamicArray!Mesh mesh = parsObj("/home/maik/projects/breeze/bin/cube.obj");
+    DynamicArray!Mesh mesh = parsObj("/home/maik/projects/breeze/bin/akm.obj");
     auto vertexBuffer2 = createVertexBuffer!Mesh(mesh[]);
-    writeln(mesh[]);
     w.mainLoop((ref w){
         if (input.getAction!"Exit"){
             glfwSetWindowShouldClose(w.window, true);

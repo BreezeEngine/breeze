@@ -44,10 +44,23 @@ auto parsObj(string path){
                 import std.algorithm.iteration;
                 auto r = arr[ 1 .. $].map!(s => s.split("/"))
                                      .map!(a => a.map!(s => to!int(s) - 1));
-                foreach(e; r){
-                    vertexIndices.insert(e[0]);
-                    uvIndices.insert(e[1]);
-                    normalIndices.insert(e[2]);
+                if(r.length is 3){
+                    foreach(e; r){
+                        vertexIndices.insert(e[0]);
+                        uvIndices.insert(e[1]);
+                        normalIndices.insert(e[2]);
+                    }
+                }
+                else if(r.length is 4){
+                    alias f = (range){
+                        foreach(index; range){
+                            vertexIndices.insert(r[index][0]);
+                            uvIndices.insert(r[index][1]);
+                            normalIndices.insert(r[index][2]);
+                        }
+                    };
+                    f([0, 1, 2]);
+                    f([0, 2, 3]);
                 }
 
             }
@@ -55,7 +68,7 @@ auto parsObj(string path){
                 import std.algorithm.iteration;
                 import std.algorithm.mutation: copy;
                 float[2] data;
-                arr[1..$].map!(s => s.to!float).copy(data[]);
+                arr[1..$].map!(s => s.to!float)[0 .. 2].copy(data[]);
                 uvs.insert(Vec2f(data));
             }
         }
