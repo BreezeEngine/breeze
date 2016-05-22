@@ -30,6 +30,7 @@ if(Types.length < char.max - 1){
             return null;
         }
     }
+
 private:
     char type = char.max;
     union{

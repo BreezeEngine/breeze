@@ -1,0 +1,4 @@
+name "vulkan"
+dependency "breeze" version="*"
+
+targetPath "../../bin"

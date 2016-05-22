@@ -2,7 +2,349 @@ module breeze.input;
 import std.stdio;
 import option;
 
+
 import derelict.sdl2.sdl;
+
+int[keycodes.length] genKeycodesLookup(){
+		int[keycodes.length] lookUpTable;
+		foreach(index, keycode; keycodes){
+				lookUpTable[index] = keycode;
+		}
+		return lookUpTable;
+}
+enum keycodesLookup = genKeycodesLookup;
+
+int[int] genKeycodeHash(){
+		import std.range: iota;
+		int[int] keyHash;
+		foreach(index; iota(0, 236)){
+				keyHash[keycodes[index]] = index;
+		}
+		return keyHash;
+}
+
+enum keycodeHash = genKeycodeHash();
+
+struct GLContext{
+		SDL_GLContext context;
+}
+struct Window{
+		import breeze.math.vector;
+		import derelict.sdl2.sdl;
+		import derelict.opengl3.gl3;
+		SDL_Window* handle;
+		Input* input;
+		this(string title, int width, int height, Input* _input){
+				DerelictSDL2.load();
+				handle = SDL_CreateWindow(title.ptr, 0, 0, width, height, SDL_WINDOW_OPENGL);
+				input = _input;
+		}
+		bool shouldExit = false;
+
+		GLContext createGLContext(){
+				DerelictGL3.load();
+				auto sdlc = SDL_GL_CreateContext(handle);
+				DerelictGL3.reload();
+				return GLContext(sdlc);
+		}
+
+		~this(){
+				SDL_DestroyWindow(handle);
+		}
+
+		void setWindowPosition(Vec2i pos){
+				SDL_SetWindowPosition(handle, pos.x, pos.y);
+		}
+
+		Vec2i getWindowPosition(){
+				int x, y;
+				SDL_GetWindowPosition(handle, &x, &y);
+				return Vec2i(x, y);
+		}
+
+		void moveWindow(Vec2i dir){
+				auto pos = getWindowPosition();
+				setWindowPosition(pos + dir);
+		}
+
+		void close(){
+				shouldExit = true;
+		}
+
+		void mainLoop(void delegate(Input* input) f){
+				while(!shouldExit){
+						SDL_PumpEvents();
+						input.poll();
+						foreach(ref ws; input.windowStates){
+								if(SDL_GetWindowID(handle) is ws.handle){
+										shouldExit = true;
+								}
+						}
+						glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+						glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+						f(input);
+						SDL_GL_SwapWindow(handle);
+				}
+		}
+}
+
+
+struct KeyInput{
+		Key key;
+		KeyState keystate;
+		uint modifier;
+		uint time;
+}
+
+struct Input{
+		uint currentWindow;
+		KeyState[5] mouseKeys;
+		import std.container.array;
+		struct WindowState{
+				uint handle;
+				bool shouldClose;
+		}
+		Array!WindowState windowStates;
+		//struct KeyData(Keys){
+		//		enum length = __traits(allMembers, Keys).length;
+		//		bool[length] keysPressed;
+		//		bool[length] keysReleased;
+		//		bool[length] keysHolding;
+		//}
+		//KeyData!Key keyboardData;
+		Array!KeyInput keyinputs;
+		void poll(){
+				SDL_Event event;
+				while(SDL_PollEvent(&event)){
+						
+						if(event.type is SDL_QUIT){
+								windowStates.insert(WindowState(currentWindow, true));
+						}
+						if(event.type is SDL_WINDOWEVENT){
+								if(event.window.event is SDL_WINDOWEVENT_FOCUS_GAINED){
+										currentWindow = event.window.windowID;
+								}
+						}
+						if(event.type is SDL_KEYDOWN || event.type is SDL_KEYUP){
+								if(!event.key.repeat){
+										KeyInput keyinput = {
+												key:cast(Key)keycodeHash[event.key.keysym.sym],
+												keystate:cast(KeyState)event.key.state,
+												time:event.key.timestamp,
+												modifier:event.key.keysym.mod
+										};
+										keyinputs.insert(keyinput);
+									//	auto keystate = cast(KeyState)event.key.state;
+									//	auto key = cast(Key)keycodeHash[event.key.keysym.sym];
+									//	if(keystate is KeyState.pressed){
+									//			keyboardData.keysPressed[key] = true;
+									//			keyboardData.keysHolding[key] = true;
+									//	}
+									//	if(keystate is KeyState.released){
+									//			keyboardData.keysHolding[key] = false;
+									//			keyboardData.keysReleased[key] = true;
+									//	}
+								}
+						}
+						if(event.type is SDL_MOUSEBUTTONDOWN){
+								mouseKeys[event.button.button - 1] = KeyState.pressed;
+						}
+						if(event.type is SDL_MOUSEBUTTONUP){
+								mouseKeys[event.button.button - 1] = KeyState.released;
+						}
+						if(event.type is SDL_MOUSEWHEEL){
+						}
+						if(event.type is SDL_MOUSEMOTION){
+						}
+				}
+		}
+		void reset(){
+				keyinputs.clear;
+		}
+}
+
+Option!Key getKeyFromString(string keyName){
+		import std.string: toLower;
+		foreach(_keyName; __traits(allMembers, Key)){
+				if(keyName.toLower is _keyName){
+						return some(__traits(getMember, Key, _keyName));
+				}
+		}
+		return none!Key;
+}
+
+struct AxisState{
+		string name;
+		int min;
+		int max;
+}
+struct Axis(_names...){
+		import std.meta: allSatisfy;
+		enum isAxisState(alias as) = is(typeof(as) == AxisState);
+		static assert(allSatisfy!(isAxisState, _names), "All types must be of type AxisState");
+		alias names = _names;
+}
+struct Action(_names...){
+		alias names = _names;
+}
+
+auto varOr(Vals...)(Vals vals){
+		static if(vals.length == 1){
+				return vals[0];
+		}
+		else{
+				return vals[0] | varOr(vals[1 .. $]);
+		}
+}
+struct InputMap(Axis,Action){
+		import option;
+		import std.container: Array;
+
+		import std.typecons;
+		Array!(Tuple!(KeyMatch, int))[Axis.names.length] axisBindings;
+		Array!KeyMatch[Action.names.length] actionBindings;
+		int[Axis.names.length] axisResults;
+
+		bool[Action.names.length] actionPressed;
+		bool[Action.names.length] actionHolding;
+		bool[Action.names.length] actionReleased;
+
+		int[Axis.names.length] axisDown;
+
+		void reset(){
+				import std.range: iota;
+				foreach(index; iota(0, Action.names.length)){
+						actionPressed[index] = false;
+						actionReleased[index] = false;
+				}
+		}
+
+		void update(Array!KeyInput keyinputs){
+				foreach(keyinput; keyinputs){
+						foreach(index, actionKeys; actionBindings){
+								foreach(actionKey; actionKeys){
+										if(actionKey.key is keyinput.key && actionKey.keymod is keyinput.modifier){
+												if(keyinput.keystate is KeyState.pressed){
+														actionPressed[index] = true;
+														actionHolding[index] = true;
+												}
+												if(keyinput.keystate is KeyState.released){
+														actionReleased[index] = true;
+														actionHolding[index] = false;
+												}
+												
+										}
+								}
+						}
+						foreach(index, axisKeyMatches; axisBindings){
+								foreach(axisKeyMatch; axisKeyMatches){
+										if(axisKeyMatch[0].key is keyinput.key){
+												if(axisKeyMatch[0].keymod is keyinput.modifier){
+														if(keyinput.keystate is KeyState.pressed){
+																axisDown[index] += axisKeyMatch[1];
+														}
+												}
+												if(keyinput.keystate is KeyState.released && axisDown[index] !is 0){
+														axisDown[index] += -axisKeyMatch[1];
+												}
+										}
+								}
+						}
+
+				}
+		}
+
+		struct KeyMatch{
+				Key key;
+				uint keymod;
+		}
+		void action(string name, KeyMods...)(Key key, KeyMods keymods){
+				import std.meta: staticIndexOf;
+				enum index = staticIndexOf!(name, Action.names);
+				static if(keymods.length > 0){
+						actionBindings[index].insert(KeyMatch(key, varOr(keymods)));
+				}
+				else{
+						actionBindings[index].insert(KeyMatch(key, 0));
+				}
+		}
+
+		bool getAction(KeyState state, string name)(){
+				import std.meta;
+				import std.algorithm.searching;
+				enum index = staticIndexOf!(name, Action.names);
+				static if(state is KeyState.pressed){
+						return actionPressed[index];
+				}
+				else if(state is KeyState.released){
+						return actionReleased[index];
+				}
+				else{
+						return actionHolding[index];
+				}
+		}
+
+		void axis(string name, KeyMods...)(int value, Key key, KeyMods keymods){
+				import std.meta;
+				enum filterAxisState(string name, alias axisState) = axisState.name is name;
+				enum filterByName(alias axisState) = filterAxisState!(name, axisState);
+				alias r = Filter!(filterByName, Axis.names);
+				static assert(r.length is 1, "Needs to be 1");
+				enum index = staticIndexOf!(r[0], Axis.names);
+				static if(keymods.length > 0){
+						axisBindings[index].insert(tuple(KeyMatch(key, varOr(keymods)), value));
+				}
+				else{
+						axisBindings[index].insert(tuple(KeyMatch(key, 0), value));
+				}
+		}
+		float getAxis(string name)(){
+				import std.range;
+				import std.meta;
+				import std.algorithm.iteration;
+				import std.algorithm.comparison;
+				enum filterAxisState(string name, alias axisState) = axisState.name is name;
+				enum filterByName(alias axisState) = filterAxisState!(name, axisState);
+				alias r = Filter!(filterByName, Axis.names);
+				static assert(r.length is 1, "Needs to be 1");
+				enum index = staticIndexOf!(r[0], Axis.names);
+				return axisDown[index];
+		}
+}
+
+enum KeyState{
+		released,
+		pressed,
+		holding
+}
+
+enum MouseKey{
+		left,
+		middle,
+		right,
+		x1,
+		x2
+}
+
+enum KeyMod{
+		none   = KMOD_NONE,
+		lshift = KMOD_LSHIFT,
+		rshift = KMOD_RSHIFT,
+		lctrl  = KMOD_LCTRL,
+		rctrl  = KMOD_RCTRL,
+		lalt,
+		ralt,
+		lgui,
+		rgui,
+		num,
+		caps,
+		mode,
+		ctrl,
+		shift,
+		alt,
+		gui,
+		reserved
+}
 
 enum Key{
 		unknown,
@@ -481,600 +823,3 @@ enum int[236] keycodes = [
 		1073742105,
 		1073742106
 ];
-
-int[keycodes.length] genKeycodesLookup(){
-		int[keycodes.length] lookUpTable;
-		foreach(index, keycode; keycodes){
-				lookUpTable[index] = keycode;
-		}
-		return lookUpTable;
-}
-enum keycodesLookup = genKeycodesLookup;
-
-int[int] genKeycodeHash(){
-		import std.range: iota;
-		int[int] keyHash;
-		foreach(index; iota(0, 236)){
-				keyHash[keycodes[index]] = index;
-		}
-		return keyHash;
-}
-
-enum keycodeHash = genKeycodeHash();
-
-struct GLContext{
-		SDL_GLContext context;
-}
-struct Window{
-		import breeze.math.vector;
-		import derelict.sdl2.sdl;
-		import derelict.opengl3.gl3;
-		SDL_Window* handle;
-		Input* input;
-		this(string title, int width, int height, Input* _input){
-				DerelictSDL2.load();
-				handle = SDL_CreateWindow(title.ptr, 0, 0, width, height, SDL_WINDOW_OPENGL);
-				input = _input;
-		}
-
-		GLContext createGLContext(){
-				DerelictGL3.load();
-				auto sdlc = SDL_GL_CreateContext(handle);
-				DerelictGL3.reload();
-				return GLContext(sdlc);
-		}
-
-		~this(){
-				SDL_DestroyWindow(handle);
-		}
-
-		void setWindowPosition(Vec2i pos){
-				SDL_SetWindowPosition(handle, pos.x, pos.y);
-		}
-
-		Vec2i getWindowPosition(){
-				int x, y;
-				SDL_GetWindowPosition(handle, &x, &y);
-				return Vec2i(x, y);
-		}
-
-		void moveWindow(Vec2i dir){
-				auto pos = getWindowPosition();
-				setWindowPosition(pos + dir);
-		}
-
-		void mainLoop(void delegate(Input* input) f){
-				bool shouldExit = false;
-				while(!shouldExit){
-						SDL_PumpEvents();
-						input.poll();
-						foreach(ref ws; input.windowStates){
-								if(SDL_GetWindowID(handle) is ws.handle){
-										shouldExit = true;
-								}
-						}
-						glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-						glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-						f(input);
-						SDL_GL_SwapWindow(handle);
-				}
-		}
-}
-
-enum MouseKey{
-		left,
-		middle,
-		right,
-		x1,
-		x2
-}
-enum KeyState{
-		released,
-		pressed,
-		holding
-}
-enum KeyMod{
-		none,
-		lshift,
-		rshift,
-		lctrl,
-		rctrl,
-		lalt,
-		ralt,
-		lgui,
-		rgui,
-		num,
-		caps,
-		mode,
-		ctrl,
-		shift,
-		alt,
-		gui,
-		reserved
-}
-
-struct KeyInput{
-		Key key;
-		KeyState keystate;
-		KeyMod modifier;
-		uint scancode;
-		uint time;
-}
-struct Input{
-		uint currentWindow;
-		KeyState[5] mouseKeys;
-		import std.container.array;
-		struct WindowState{
-				uint handle;
-				bool shouldClose;
-		}
-		Array!WindowState windowStates;
-		bool[keycodes.length] keysPressed;
-		bool[keycodes.length] keysReleased;
-		bool[keycodes.length] keysHolding;
-
-		void poll(){
-				SDL_Event event;
-				while(SDL_PollEvent(&event)){
-						
-						if(event.type is SDL_QUIT){
-								windowStates.insert(WindowState(currentWindow, true));
-						}
-						if(event.type is SDL_WINDOWEVENT){
-								if(event.window.event is SDL_WINDOWEVENT_FOCUS_GAINED){
-										currentWindow = event.window.windowID;
-								}
-						}
-						if(event.type is SDL_KEYDOWN || event.type is SDL_KEYUP){
-								if(!event.key.repeat){
-										auto keystate = cast(KeyState)event.key.state;
-										auto key = cast(Key)keycodeHash[event.key.keysym.sym];
-										if(keystate is KeyState.pressed){
-												keysPressed[key] = true;
-												keysHolding[key] = true;
-										}
-										if(keystate is KeyState.released){
-												keysHolding[key] = false;
-												keysReleased[key] = true;
-										}
-								}
-
-						}
-						if(event.type is SDL_MOUSEBUTTONDOWN){
-								mouseKeys[event.button.button - 1] = KeyState.pressed;
-						}
-						if(event.type is SDL_MOUSEBUTTONUP){
-								mouseKeys[event.button.button - 1] = KeyState.released;
-						}
-						if(event.type is SDL_MOUSEWHEEL){
-						}
-						if(event.type is SDL_MOUSEMOTION){
-						}
-				}
-		}
-		void reset(){
-				import std.range: iota;
-				foreach(index; iota(0, keycodes.length)){
-						keysPressed[index] = false;
-						keysReleased[index] = false;
-				}
-		}
-}
-//enum Key{
-//		unknown,
-//		space,
-//		apostrophe,
-//		comma,
-//		minus,
-//		period,
-//		slash,
-//		num0,
-//		num1,
-//		num2,
-//		num3,
-//		num4,
-//		num5,
-//		num6,
-//		num7,
-//		num8,
-//		num9,
-//		semicolon,
-//		equal,
-//		a,
-//		b,
-//		c,
-//		d,
-//		e,
-//		f,
-//		g,
-//		h,
-//		i,
-//		j,
-//		k,
-//		l,
-//		m,
-//		n,
-//		o,
-//		p,
-//		q,
-//		r,
-//		s,
-//		t,
-//		u,
-//		v,
-//		w,
-//		x,
-//		y,
-//		z,
-//		leftBracket,
-//		backslash,
-//		rightBracket,
-//		graveAccent,
-//		world1,
-//		world2,
-//		escape,
-//		enter,
-//		tab,
-//		backspace,
-//		insert,
-//		del,
-//		right,
-//		left,
-//		down,
-//		up,
-//		pageUp,
-//		pageDown,
-//		home,
-//		end,
-//		capsLock,
-//		scrollLock,
-//		numLock,
-//		printScreen,
-//		pause,
-//		f1,
-//		f2,
-//		f3,
-//		f4,
-//		f5,
-//		f6,
-//		f7,
-//		f8,
-//		f9,
-//		f10,
-//		f11,
-//		f12,
-//		f13,
-//		f14,
-//		f15,
-//		f16,
-//		f17,
-//		f18,
-//		f19,
-//		f20,
-//		f21,
-//		f22,
-//		f23,
-//		f24,
-//		f25,
-//		kp0,
-//		kp1,
-//		kp2,
-//		kp3,
-//		kp4,
-//		kp5,
-//		kp6,
-//		kp7,
-//		kp8,
-//		kp9,
-//		kpDecimal,
-//		kpDivide,
-//		kpMultiply,
-//		kpSubtract,
-//		kpAdd,
-//		kpEnter,
-//		kpEqual,
-//		leftShift,
-//		leftControl,
-//		leftAlt,
-//		leftSuper,
-//		rightShift,
-//		rightControl,
-//		rightAlt,
-//		rightSuper,
-//		menu,
-//		last
-//}
-//
-//enum numberOfKeys = __traits(allMembers, Key).length;
-//import containers.dynamicarray;
-//enum int[numberOfKeys] glfwLookupArray(){
-//		import std.stdio;
-//		int[numberOfKeys] glfw = 
-//				[-1,
-//				32,
-//				39,
-//				44,
-//				45,
-//				46,
-//				47,
-//				48,
-//				49,
-//				50,
-//				51,
-//				52,
-//				53,
-//				54,
-//				55,
-//				56,
-//				57,
-//				59,
-//				61,
-//				65,
-//				66,
-//				67,
-//				68,
-//				69,
-//				70,
-//				71,
-//				72,
-//				73,
-//				74,
-//				75,
-//				76,
-//				77,
-//				78,
-//				79,
-//				80,
-//				81,
-//				82,
-//				83,
-//				84,
-//				85,
-//				86,
-//				87,
-//				88,
-//				89,
-//				90,
-//				91,
-//				92,
-//				93,
-//				96,
-//				161,
-//				162,
-//				256,
-//				257,
-//				258,
-//				259,
-//				260,
-//				261,
-//				262,
-//				263,
-//				264,
-//				265,
-//				266,
-//				267,
-//				268,
-//				269,
-//				280,
-//				281,
-//				282,
-//				283,
-//				284,
-//				290,
-//				291,
-//				292,
-//				293,
-//				294,
-//				295,
-//				296,
-//				297,
-//				298,
-//				299,
-//				300,
-//				301,
-//				302,
-//				303,
-//				304,
-//				305,
-//				306,
-//				307,
-//				308,
-//				309,
-//				310,
-//				311,
-//				312,
-//				313,
-//				314,
-//				320,
-//				321,
-//				322,
-//				323,
-//				324,
-//				325,
-//				326,
-//				327,
-//				328,
-//				329,
-//				330,
-//				331,
-//				332,
-//				333,
-//				334,
-//				335,
-//				336,
-//				340,
-//				341,
-//				342,
-//				343,
-//				344,
-//				345,
-//				346,
-//				347,
-//				348,
-//				348];
-//		return glfw;
-//}
-//Option!Key getKeyFromString(string keyName){
-//		import std.string: toLower;
-//		foreach(_keyName; __traits(allMembers, Key)){
-//				if(keyName.toLower is _keyName){
-//						return some(__traits(getMember, Key, _keyName));
-//				}
-//		}
-//		return none!Key;
-//}
-struct GLFWWindow{
-		import derelict.glfw3.glfw3;
-		import derelict.opengl3.gl3;
-		import breeze.math.vector;
-		GLFWwindow* window;
-		Vec2d lastMousePos;
-		int width, height;
-		import std.container.array;
-		Array!int keyinputs;
-		this(int _width, int _height, string title){
-				height = _height;
-				width = _width;
-				DerelictGL3.load();
-				glfwInit();
-				// Set all the required options for GLFW
-				glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-				glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-				glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-				glfwWindowHint(GLFW_RESIZABLE, false);
-
-				// Create a GLFWwindow object that we can use for GLFW's functions
-				window = glfwCreateWindow(width, height, title.ptr, null, null);
-				glfwMakeContextCurrent(window);
-				DerelictGL3.reload;
-
-				// Define the viewport dimensions
-				glViewport(0, 0, width, height);
-				glEnable(GL_DEPTH_TEST);
-				glEnable(GL_CULL_FACE);
-
-				glfwSetWindowUserPointer(window, cast(void*)&this);
-				glfwSetKeyCallback(window, (w, key, scan, action, mods){
-								import std.stdio;
-								GLFWWindow* win= cast(GLFWWindow*)glfwGetWindowUserPointer(w);
-								try{
-								win.keyinputs.insert(key);
-								}
-								catch(Exception e){}
-				});
-				glfwSetMouseButtonCallback(window, (w, bt, act, mod){
-								import std.stdio;
-								try{
-								writeln("Mouse: ", bt, " ", act);
-								}
-								catch(Exception e){}
-				});
-				glfwSetScrollCallback(window, (w, x, y){
-								import std.stdio;
-								try{
-								writeln("Mouse: ", x, " ", y);
-								}
-								catch(Exception e){}
-				});
-		}
-		auto getMousePos(){
-			double x = void;
-			double y = void;
-			glfwGetCursorPos(window, &x, &y);
-			return Vec2d(x, y);
-		}
-		auto ref getLastMousePos(){
-			return lastMousePos;
-		}
-		auto getDeltaMousePos(){
-			return lastMousePos - getMousePos();
-		}
-		void mainLoop(void delegate(ref GLFWWindow) f){
-				while (!glfwWindowShouldClose(window)){
-						glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-						glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-						f(this);
-						lastMousePos = getMousePos();
-						glfwPollEvents();
-						glfwSwapBuffers(window);
-				}
-		}
-		bool getKey(int key){
-				return glfwGetKey(window, key) == GLFW_PRESS;
-		}
-}
-struct AxisState{
-		string name;
-		int min;
-		int max;
-}
-struct Axis(_names...){
-		import std.meta: allSatisfy;
-		enum isAxisState(alias as) = is(typeof(as) == AxisState);
-		static assert(allSatisfy!(isAxisState, _names), "All types must be of type AxisState");
-		alias names = _names;
-}
-struct Action(_names...){
-		alias names = _names;
-}
-
-struct InputMap(Axis,Action){
-		import option;
-		import std.container: Array;
-
-		import std.typecons;
-		Array!(Tuple!(Key, int))[Axis.names.length] axisBindings;
-		Array!Key[Action.names.length] actionBindings;
-		int[Axis.names.length] axisResults;
-
-		void action(string name, Keys...)(Keys keys){
-				import std.meta: staticIndexOf;
-				enum index = staticIndexOf!(name, Action.names);
-				foreach(key; keys){
-						import std.stdio;
-						actionBindings[index].insert(key);
-				}
-		}
-
-		bool getAction(KeyState state, string name)(ref Input input){
-				import std.meta;
-				import std.algorithm.searching;
-				enum index = staticIndexOf!(name, Action.names);
-				static if(state is KeyState.pressed){
-						return actionBindings[index][].any!(key => input.keysPressed[key]);
-				}
-				else if(state is KeyState.released){
-						return actionBindings[index][].any!(key => input.keysReleased[key]);
-				}
-				else{
-						return actionBindings[index][].any!(key => input.keysHolding[key]);
-				}
-		}
-
-		void axis(string name)(Key key, int value){
-				import std.meta;
-				enum filterAxisState(string name, alias axisState) = axisState.name is name;
-				enum filterByName(alias axisState) = filterAxisState!(name, axisState);
-				alias r = Filter!(filterByName, Axis.names);
-				static assert(r.length is 1, "Needs to be 1");
-				enum index = staticIndexOf!(r[0], Axis.names);
-				axisBindings[index].insert(tuple(key, value));
-		}
-		float getAxis(string name)(ref Input input){
-				import std.range;
-				import std.meta;
-				import std.algorithm.iteration;
-				import std.algorithm.comparison;
-				enum filterAxisState(string name, alias axisState) = axisState.name is name;
-				enum filterByName(alias axisState) = filterAxisState!(name, axisState);
-				alias r = Filter!(filterByName, Axis.names);
-				static assert(r.length is 1, "Needs to be 1");
-				enum index = staticIndexOf!(r[0], Axis.names);
-				return reduce!((acc, keyTuple){
-								if(input.keysHolding[keyTuple[0]]){
-										return acc + keyTuple[1];
-								}
-								return acc;
-				})(0.0f, axisBindings[index][]).clamp(Axis.names[index].min, Axis.names[index].max);
-		}
-}

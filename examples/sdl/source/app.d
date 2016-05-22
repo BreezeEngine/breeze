@@ -22,27 +22,30 @@ void main()
 //				writeln(w.keyinputs[]);
 //				w.keyinputs.clear;
 //		});
+		import std.typecons;
+		import std.meta;
 		auto input = Input();
 		auto window = Window("Test", 720, 480, &input);
 		auto context = window.createGLContext;
 		auto im = InputMap!(
 				Axis!(AxisState("Forward", -1, 1)),
-				Action!("Escape"))();
-		im.action!"Escape"(Key.q);
-		im.axis!"Forward"(Key.w, 1);
-		im.axis!"Forward"(Key.s, -1);
+				Action!("Exit", "Quit"))();
+		im.action!"Exit"(Key.escape);
+		im.action!"Quit"(Key.q, KeyMod.lshift);
+		im.axis!"Forward"(1, Key.w, KeyMod.lshift);
+		im.axis!"Forward"(-1,Key.s, KeyMod.lshift);
 		window.mainLoop((input){
-				if(im.getAction!(KeyState.pressed, "Escape")(*input)){
-						writeln("Down Escape");
-				}
-				if(im.getAction!(KeyState.released, "Escape")(*input)){
-						writeln("Rel Escape");
-				}
-				if(im.getAction!(KeyState.holding, "Escape")(*input)){
-						writeln("holding Escape");
-				}
-
-				writeln(im.getAxis!"Forward"(*input));
+				im.update(input.keyinputs);
+				//if(!input.keyinputs.empty)
+				//writeln(input.keyinputs[]);
+				//if(im.getAction!(KeyState.pressed, "Exit")){
+				//		window.close();
+				//}
+				//if(im.getAction!(KeyState.pressed, "Quit")){
+				//		writeln("shift+q");
+				//}
+				writeln(im.getAxis!"Forward");
+				im.reset;
 				input.reset;
 		});
 //		im.action!"Escape"((ref KeyInput keyinput){

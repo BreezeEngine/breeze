@@ -30,7 +30,6 @@ static immutable string fragment = q{
 
 void main()
 {
-
     import std.meta;
     import breeze.graphics.opengl.shader;
     import breeze.graphics.opengl.types;
