@@ -9,7 +9,6 @@
 		"xlib-d": "0.1.0",
 		"emsi_containers": "0.3.0",
 		"derelict-util": "2.0.6",
-		"erupted": "1.3.0",
 		"derelict-gl3": "1.0.18"
 	}
 }

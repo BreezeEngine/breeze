@@ -14,8 +14,9 @@ VkBool32 MyDebugReportCallback(
     int32_t                     messageCode,
     const char*                 pLayerPrefix,
     const char*                 pMessage,
-    void*                       pUserData)
+    void*                       pUserData) nothrow @nogc
 {
+	printf(pMessage);
 	return VK_FALSE;
 }
 
@@ -25,8 +26,13 @@ struct VkContext{
 	VkPhysicalDevice physicalDevice;
 	VkDevice logicalDevice;
 	ulong presentQueueFamilyIndex = -1;
-	VkQueue graphicsQueue;
 	VkQueue presentQueue;
+	uint width = -1;
+	uint height = -1;
+	VkSwapchainKHR swapchain;
+	VkCommandBuffer setupCmdBuffer;
+	VkCommandBuffer drawCmdBuffer;
+	VkImage[] presentImages;
 }
 void main()
 {
@@ -37,6 +43,8 @@ void main()
 	import core.stdc.string;
 
 	VkContext vkcontext;
+	vkcontext.width = 800;
+	vkcontext.height = 600;
 
 	DerelictSDL2.load();
 	auto sdlWindow = SDL_CreateWindow("vulkan", 0, 0, 800, 600, 0);
@@ -93,13 +101,17 @@ void main()
 	//uint function(uint flags, VkDebugReportObjectTypeEXT objectType, ulong object, ulong location, int messageCode, const(char*) pLayerPrefix, const(char*) pMessage, void* pUserData)
 
 	loadInstanceLevelFunctions(vkcontext.instance);
-	//auto debugcallbackCreateInfo = VkDebugReportCallbackCreateInfoEXT(
-	//	VkStructureType.VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
-	//	null,
-	//	VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_ERROR_BIT_EXT,
-	//	&MyDebugReportCallback,
-	//	null
-	//);
+	auto debugcallbackCreateInfo = VkDebugReportCallbackCreateInfoEXT(
+		VkStructureType.VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
+		null,
+		VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_ERROR_BIT_EXT |
+		VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_WARNING_BIT_EXT |
+		VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
+		&MyDebugReportCallback,
+		null
+	);
+	VkDebugReportCallbackEXT callback;
+	enforceVk(vkCreateDebugReportCallbackEXT(vkcontext.instance, &debugcallbackCreateInfo, null, &callback));
 
 	auto xlibInfo = VkXlibSurfaceCreateInfoKHR(
 		VkStructureType.VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
@@ -183,8 +195,8 @@ void main()
 		0,
 		1,
 		&deviceQueueCreateInfo,
-		0,
-		null,
+		validationLayers.length,
+		validationLayers.ptr,
 		cast(uint)deviceExtensions.length,
 		deviceExtensions.ptr,
 		null
@@ -193,5 +205,187 @@ void main()
 
 	loadDeviceLevelFunctions(vkcontext.logicalDevice);
 	VkQueue queue;
-	vkGetDeviceQueue(vkcontext.logicalDevice, cast(uint)vkcontext.presentQueueFamilyIndex, 0, &vkcontext.graphicsQueue);
+	vkGetDeviceQueue(vkcontext.logicalDevice, cast(uint)vkcontext.presentQueueFamilyIndex, 0, &vkcontext.presentQueue);
+
+	uint formatCount = 0;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(vkcontext.physicalDevice, vkcontext.surface, &formatCount, null);
+	enforce(formatCount > 0, "Format failed");
+	auto surfaceFormats = new VkSurfaceFormatKHR[](formatCount);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(vkcontext.physicalDevice, vkcontext.surface, &formatCount, surfaceFormats.ptr);
+
+	VkFormat colorFormat;
+	if(surfaceFormats[0].format is VK_FORMAT_UNDEFINED){
+		colorFormat = VK_FORMAT_B8G8R8_UNORM;
+	}
+	else{
+		colorFormat = surfaceFormats[0].format;
+	}
+
+	VkColorSpaceKHR colorSpace;
+	colorSpace = surfaceFormats[0].colorSpace;
+
+	VkSurfaceCapabilitiesKHR surfaceCapabilities;
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkcontext.physicalDevice, vkcontext.surface, &surfaceCapabilities);
+
+	uint desiredImageCount = 2;
+	if( desiredImageCount < surfaceCapabilities.minImageCount ) {
+	    desiredImageCount = surfaceCapabilities.minImageCount;
+	}
+	else if( surfaceCapabilities.maxImageCount != 0 &&
+	         desiredImageCount > surfaceCapabilities.maxImageCount ) {
+		desiredImageCount = surfaceCapabilities.maxImageCount;
+	}
+
+	VkExtent2D surfaceResolution = surfaceCapabilities.currentExtent;
+
+	if(surfaceResolution.width is -1){
+		surfaceResolution.width = vkcontext.width;
+		surfaceResolution.height = vkcontext.height;
+	}
+	else{
+		vkcontext.width = surfaceResolution.width;
+		vkcontext.height = surfaceResolution.height;
+	}
+
+	VkSurfaceTransformFlagBitsKHR preTransform = surfaceCapabilities.currentTransform;
+	if(surfaceCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR){
+		preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+	}
+
+	uint presentModeCount = 0;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(vkcontext.physicalDevice, vkcontext.surface, &presentModeCount, null);
+	auto presentModes = new VkPresentModeKHR[](presentModeCount);
+	vkGetPhysicalDeviceSurfacePresentModesKHR(vkcontext.physicalDevice, vkcontext.surface, &presentModeCount, presentModes.ptr);
+
+	VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+	foreach(mode; presentModes){
+		if(mode is VK_PRESENT_MODE_MAILBOX_KHR){
+			presentMode = mode;
+			break;
+		}
+	}
+
+	VkSwapchainCreateInfoKHR swapchainCreateInfo;
+	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	swapchainCreateInfo.surface = vkcontext.surface;
+	swapchainCreateInfo.imageFormat = colorFormat;
+	swapchainCreateInfo.minImageCount = desiredImageCount;
+	swapchainCreateInfo.imageColorSpace = colorSpace;
+	swapchainCreateInfo.imageExtent = surfaceResolution;
+	swapchainCreateInfo.imageArrayLayers = 1;
+	swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	swapchainCreateInfo.imageSharingMode = VkSharingMode.VK_SHARING_MODE_EXCLUSIVE;
+	swapchainCreateInfo.preTransform = preTransform;
+	swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	swapchainCreateInfo.presentMode = presentMode;
+	swapchainCreateInfo.clipped = VK_TRUE;
+	swapchainCreateInfo.oldSwapchain = null;
+
+	enforceVk(vkCreateSwapchainKHR(vkcontext.logicalDevice, &swapchainCreateInfo, null, &vkcontext.swapchain));
+
+	VkCommandPoolCreateInfo commandPoolCreateInfo;
+	commandPoolCreateInfo.sType = VkStructureType.VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	commandPoolCreateInfo.queueFamilyIndex = cast(uint)vkcontext.presentQueueFamilyIndex;
+
+	VkCommandPool commandPool;
+	enforceVk(vkCreateCommandPool(vkcontext.logicalDevice, &commandPoolCreateInfo, null, &commandPool));
+
+	VkCommandBufferAllocateInfo cmdBufferAllocateInfo;
+	cmdBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cmdBufferAllocateInfo.commandPool = commandPool;
+	cmdBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	cmdBufferAllocateInfo.commandBufferCount = 1;
+
+	enforceVk(vkAllocateCommandBuffers(vkcontext.logicalDevice, &cmdBufferAllocateInfo, &vkcontext.setupCmdBuffer));
+	enforceVk(vkAllocateCommandBuffers(vkcontext.logicalDevice, &cmdBufferAllocateInfo, &vkcontext.drawCmdBuffer));
+
+
+	uint imageCount = 0;
+	vkGetSwapchainImagesKHR(vkcontext.logicalDevice, vkcontext.swapchain, &imageCount, null);
+	vkcontext.presentImages = new VkImage[](imageCount);
+	enforceVk(vkGetSwapchainImagesKHR(vkcontext.logicalDevice, vkcontext.swapchain, &imageCount, vkcontext.presentImages.ptr));
+
+	VkImageViewCreateInfo imgViewCreateInfo;
+	imgViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	imgViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	imgViewCreateInfo.format = colorFormat;
+	imgViewCreateInfo.components =
+		VkComponentMapping(
+			VK_COMPONENT_SWIZZLE_R,
+			VK_COMPONENT_SWIZZLE_G,
+			VK_COMPONENT_SWIZZLE_B,
+			VK_COMPONENT_SWIZZLE_A,
+	);
+
+	imgViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imgViewCreateInfo.subresourceRange.baseMipLevel = 0;
+	imgViewCreateInfo.subresourceRange.levelCount = 1;
+	imgViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+	imgViewCreateInfo.subresourceRange.layerCount = 1;
+
+
+	VkCommandBufferBeginInfo beginInfo;
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	VkFenceCreateInfo fenceCreateInfo;
+	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+	VkFence submitFence;
+	vkCreateFence(vkcontext.logicalDevice, &fenceCreateInfo, null, &submitFence);
+
+
+	auto presentImageViews = new VkImageView[](imageCount);
+	import std.range: iota;
+	foreach(index; iota(0, imageCount)){
+		imgViewCreateInfo.image = vkcontext.presentImages[index];
+
+		vkBeginCommandBuffer(vkcontext.setupCmdBuffer, &beginInfo);
+		VkImageMemoryBarrier layoutTransitionBarrier;
+		layoutTransitionBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		layoutTransitionBarrier.srcAccessMask = 0;
+		layoutTransitionBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		layoutTransitionBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		layoutTransitionBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		layoutTransitionBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		layoutTransitionBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		layoutTransitionBarrier.image = vkcontext.presentImages[index];
+		layoutTransitionBarrier.subresourceRange = VkImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
+
+		vkCmdPipelineBarrier(
+			vkcontext.setupCmdBuffer,
+      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+      0,
+      0, null,
+      0, null, 
+      1, &layoutTransitionBarrier );
+
+		vkEndCommandBuffer(vkcontext.setupCmdBuffer);
+
+		VkPipelineStageFlags[1] waitStageMesh = [VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT];
+		VkSubmitInfo submitInfo;
+		submitInfo.waitSemaphoreCount = 0;
+		submitInfo.pWaitSemaphores = null;
+		submitInfo.pWaitDstStageMask = waitStageMesh.ptr;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &vkcontext.setupCmdBuffer;
+		submitInfo.signalSemaphoreCount = 0;
+		submitInfo.pSignalSemaphores = null;
+
+		enforceVk(vkQueueSubmit(vkcontext.presentQueue, 1, &submitInfo, submitFence));
+
+		vkWaitForFences(vkcontext.logicalDevice, 1, &submitFence, VK_TRUE, long.max);
+		vkResetFences(vkcontext.logicalDevice, 1, &submitFence);
+
+		vkResetCommandBuffer(vkcontext.setupCmdBuffer, 0);
+
+		enforceVk(vkCreateImageView(vkcontext.logicalDevice, &imgViewCreateInfo, null, &presentImageViews[index]));
+}
+
+
+
+
+
 }

@@ -5,17 +5,18 @@ license "GPL-2.0"
 dependency "derelict-sdl2" version="~>2.0.0"
 dependency "derelict-gl3" version="~>1.0.0"
 dependency "emsi_containers" version="~>0.3.0"
+
+dependency "erupted" version="~>1.3.2" path="deps/ErupteD"
+subConfiguration "erupted" "dub-platform-xlib-derelict-loader"
+
 dependency "derelict-glfw3" version="~>2.0.0"
 subConfiguration "derelict-glfw3" "derelict-glfw3-static"
 
-dependency "erupted" version="~>1.3.0"
-subConfiguration "erupted" "dub-platform-xlib-derelict-loader"
 
 sourceFiles "deps/linux64/glfw/libglfw3.a" platform="linux-x86_64"
 libs"Xi" "pthread" "X11" "Xxf86vm" "Xrandr" "pthread" "GL" "GLU" "Xinerama" "Xcursor" platform="linux-x86_64"
 
 sourceFiles "deps/win64/glfw/glfw3.lib" platform="windows-x86_64"
-
 subPackage "./examples/ecs"
 subPackage "./examples/opengl"
 subPackage "./examples/soatest"
