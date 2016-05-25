@@ -73,7 +73,6 @@ struct Window{
 
 		void mainLoop(void delegate(Input* input) f){
 				while(!shouldExit){
-						SDL_PumpEvents();
 						input.poll();
 						foreach(ref ws; input.windowStates){
 								if(SDL_GetWindowID(handle) is ws.handle){

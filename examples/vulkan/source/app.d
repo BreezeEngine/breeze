@@ -16,7 +16,10 @@ VkBool32 MyDebugReportCallback(
     const char*                 pMessage,
     void*                       pUserData) nothrow @nogc
 {
-	printf(pMessage);
+	import std.range;
+	import std.string;
+	//printf("Debug: \n");
+	//printf("\n");
 	return VK_FALSE;
 }
 
@@ -33,6 +36,8 @@ struct VkContext{
 	VkCommandBuffer setupCmdBuffer;
 	VkCommandBuffer drawCmdBuffer;
 	VkImage[] presentImages;
+	VkImage depthImage;
+	VkPhysicalDeviceMemoryProperties memoryProperties;
 }
 void main()
 {
@@ -47,7 +52,7 @@ void main()
 	vkcontext.height = 600;
 
 	DerelictSDL2.load();
-	auto sdlWindow = SDL_CreateWindow("vulkan", 0, 0, 800, 600, 0);
+	auto sdlWindow = SDL_CreateWindow("vulkan", 0, 0, 800, 600, SDL_WINDOW_OPENGL);
 	SDL_SysWMinfo sdlWindowInfo;
 
 	SDL_VERSION(&sdlWindowInfo.version_);
@@ -105,6 +110,7 @@ void main()
 		VkStructureType.VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
 		null,
 		VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_ERROR_BIT_EXT |
+		VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_INFORMATION_BIT_EXT |
 		VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_WARNING_BIT_EXT |
 		VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
 		&MyDebugReportCallback,
@@ -376,13 +382,89 @@ void main()
 
 		enforceVk(vkQueueSubmit(vkcontext.presentQueue, 1, &submitInfo, submitFence));
 
-		vkWaitForFences(vkcontext.logicalDevice, 1, &submitFence, VK_TRUE, long.max);
+		vkWaitForFences(vkcontext.logicalDevice, 1, &submitFence, VK_TRUE, ulong.max);
 		vkResetFences(vkcontext.logicalDevice, 1, &submitFence);
 
 		vkResetCommandBuffer(vkcontext.setupCmdBuffer, 0);
 
 		enforceVk(vkCreateImageView(vkcontext.logicalDevice, &imgViewCreateInfo, null, &presentImageViews[index]));
-}
+	}
+
+	vkGetPhysicalDeviceMemoryProperties(vkcontext.physicalDevice, &vkcontext.memoryProperties);
+
+	VkImageCreateInfo imageCreateInfo;
+	imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageCreateInfo.format = VK_FORMAT_D16_UNORM;
+	imageCreateInfo.extent = VkExtent3D(vkcontext.width, vkcontext.height, 1);
+	imageCreateInfo.mipLevels = 1;
+	imageCreateInfo.arrayLayers = 1;
+	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageCreateInfo.queueFamilyIndexCount = 0;
+	imageCreateInfo.pQueueFamilyIndices = null;
+	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+
+	enforceVk(vkCreateImage(vkcontext.logicalDevice, &imageCreateInfo, null, &vkcontext.depthImage));
+
+	VkMemoryRequirements memoryRequirements;
+	vkGetImageMemoryRequirements(vkcontext.logicalDevice, vkcontext.depthImage, &memoryRequirements);
+
+	VkMemoryAllocateInfo imageAllocationInfo;
+	imageAllocationInfo.allocationSize = memoryRequirements.size;
+
+	uint memoryTypeBits = memoryRequirements.memoryTypeBits;
+	VkMemoryPropertyFlags desiredMemoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+	foreach(index; iota(0, 32)){
+		VkMemoryType memoryType = vkcontext.memoryProperties.memoryTypes[index];
+		if(memoryTypeBits & 1){
+			if((memoryType.propertyFlags & desiredMemoryFlags) is desiredMemoryFlags){
+				imageAllocationInfo.memoryTypeIndex = index;
+				writeln("found index at ", index);
+				break;
+			}
+		}
+		memoryTypeBits = memoryTypeBits >> 1;
+	}
+
+	VkDeviceMemory imageMemory;
+	enforceVk(vkAllocateMemory(vkcontext.logicalDevice, &imageAllocationInfo, null, &imageMemory));
+
+	enforceVk(vkBindImageMemory(vkcontext.logicalDevice, vkcontext.depthImage, imageMemory, 0));
+
+	//Render
+
+	bool shouldClose = false;
+	while(!shouldClose){
+		SDL_Event event;
+		while(SDL_PollEvent(&event)){
+			if(event.type is SDL_QUIT){
+				shouldClose = true;
+			}
+		}
+
+//	  uint nextImageIdx = 0;
+//    enforceVk(vkAcquireNextImageKHR(
+//			vkcontext.logicalDevice,
+//			vkcontext.swapchain,
+//			ulong.max,
+//			null, submitFence, &nextImageIdx
+//		));
+//
+//    VkPresentInfoKHR presentInfo;
+//    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+//    presentInfo.pNext = null;
+//    presentInfo.waitSemaphoreCount = 0;
+//    presentInfo.pWaitSemaphores = null;
+//    presentInfo.swapchainCount = 1;
+//    presentInfo.pSwapchains = &vkcontext.swapchain;
+//    presentInfo.pImageIndices = &nextImageIdx;
+//    presentInfo.pResults = null;
+//    vkQueuePresentKHR( vkcontext.presentQueue, &presentInfo );
+	}
 
 
 
