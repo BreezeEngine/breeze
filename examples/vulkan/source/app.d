@@ -18,7 +18,8 @@ VkBool32 MyDebugReportCallback(
 {
 	import std.range;
 	import std.string;
-	//printf("Debug: \n");
+//	printf("Debug: \n");
+//	printf(pMessage);
 	//printf("\n");
 	return VK_FALSE;
 }
@@ -42,6 +43,8 @@ struct VkContext{
 	VkRenderPass renderPass;
 	VkFramebuffer[] frameBuffers;
 	VkBuffer vertexInputBuffer;
+	VkPipelineLayout pipelineLayout;
+	VkPipeline pipeline;
 }
 void main()
 {
@@ -199,6 +202,9 @@ void main()
 			priorities.ptr
 	);
 
+	VkPhysicalDeviceFeatures features;
+	features.shaderClipDistance = VK_TRUE;
+
 	auto deviceInfo = VkDeviceCreateInfo(
 		VkStructureType.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 		null,
@@ -209,7 +215,7 @@ void main()
 		validationLayers.ptr,
 		cast(uint)deviceExtensions.length,
 		deviceExtensions.ptr,
-		null
+		&features
 	);
 	enforceVk(vkCreateDevice(vkcontext.physicalDevice, &deviceInfo, null, &vkcontext.logicalDevice));
 
@@ -443,7 +449,8 @@ void main()
 	VkImageMemoryBarrier layoutTransitionBarrier;
 	layoutTransitionBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	layoutTransitionBarrier.srcAccessMask = 0;
-	layoutTransitionBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+	layoutTransitionBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | 
+                                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 	layoutTransitionBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	layoutTransitionBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	layoutTransitionBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -513,8 +520,8 @@ void main()
 	passAttachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	passAttachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	passAttachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	passAttachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+passAttachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	passAttachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 
@@ -523,7 +530,7 @@ void main()
 	colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	VkAttachmentReference depthAttachmentReference;
-	depthAttachmentReference.attachment = 0;
+	depthAttachmentReference.attachment = 1;
 	depthAttachmentReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 	VkSubpassDescription subpass;
@@ -598,9 +605,9 @@ void main()
 	//Vertex[] test = cast(Vertex[])mapped[0 .. Vertex.sizeof * 3];
 	Vertex* triangle = cast(Vertex*) mapped;
 
-	triangle[0] = Vertex(-1.0f, -1.0f, 0.0f, 1.0f);
-	triangle[1] = Vertex(1.0f, -1.0f, 0.0f, 1.0f);
-	triangle[1] = Vertex(0.0f, 1.0f, 0.0f, 1.0f);
+	triangle[0] = Vertex(-1.0f, 1.0f, 0.0f, 1.0f);
+	triangle[1] = Vertex(1.0f, 1.0f, 0.0f, 1.0f);
+	triangle[2] = Vertex(0.0f, -1.0f, 0.0f, 1.0f);
 
 	vkUnmapMemory(vkcontext.logicalDevice, vertexBufferMemory );
 	enforceVk(vkBindBufferMemory(vkcontext.logicalDevice, vkcontext.vertexInputBuffer, vertexBufferMemory, 0));
@@ -608,10 +615,10 @@ void main()
 	auto vertFile = File("bin/vert.spv", "r");
 	auto fragFile = File("bin/frag.spv", "r");
 
-	char[] vertCode = new char[](10000);
+	char[] vertCode = new char[](vertFile.size);
 	auto vertCodeSlice = vertFile.rawRead(vertCode);
 
-	char[] fragCode = new char[](10000);
+	char[] fragCode = new char[](fragFile.size);
 	auto fragCodeSlice = fragFile.rawRead(fragCode);
 
 	VkShaderModuleCreateInfo vertexShaderCreateInfo;
@@ -628,6 +635,164 @@ void main()
 	VkShaderModule fragmentShaderModule;
 	enforceVk(vkCreateShaderModule(vkcontext.logicalDevice, &fragmentShaderCreateInfo, null, &fragmentShaderModule));
 
+	VkPipelineLayoutCreateInfo layoutCreateInfo;
+	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutCreateInfo.setLayoutCount = 0;
+	layoutCreateInfo.pSetLayouts = null;    // Not setting any bindings!
+	layoutCreateInfo.pushConstantRangeCount = 0;
+	layoutCreateInfo.pPushConstantRanges = null;
+
+	enforceVk(vkCreatePipelineLayout(vkcontext.logicalDevice, &layoutCreateInfo, null, &vkcontext.pipelineLayout));
+
+	VkPipelineShaderStageCreateInfo[2] shaderStageCreateInfo;
+	shaderStageCreateInfo[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shaderStageCreateInfo[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+	shaderStageCreateInfo[0]._module = vertexShaderModule;
+	shaderStageCreateInfo[0].pName = "main";        // shader entry point function name
+	shaderStageCreateInfo[0].pSpecializationInfo = null;
+	
+	shaderStageCreateInfo[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shaderStageCreateInfo[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	shaderStageCreateInfo[1]._module = fragmentShaderModule;
+	shaderStageCreateInfo[1].pName = "main";        // shader entry point function name
+	shaderStageCreateInfo[1].pSpecializationInfo = null;
+
+	VkVertexInputBindingDescription vertexBindingDescription = {};
+	vertexBindingDescription.binding = 0;
+	vertexBindingDescription.stride = Vertex.sizeof;
+	vertexBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+	
+	VkVertexInputAttributeDescription vertexAttributeDescritpion = {};
+	vertexAttributeDescritpion.location = 0;
+	vertexAttributeDescritpion.binding = 0;
+	vertexAttributeDescritpion.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	vertexAttributeDescritpion.offset = 0;
+	
+	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {};
+	vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputStateCreateInfo.vertexBindingDescriptionCount = 1;
+	vertexInputStateCreateInfo.pVertexBindingDescriptions = &vertexBindingDescription;
+	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 1;
+	vertexInputStateCreateInfo.pVertexAttributeDescriptions = &vertexAttributeDescritpion;
+	
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo = {};
+	inputAssemblyStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssemblyStateCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyStateCreateInfo.primitiveRestartEnable = VK_FALSE;
+
+	VkViewport viewport = {};
+	viewport.x = 0;
+	viewport.y = 0;
+	viewport.width = vkcontext.width;
+	viewport.height = vkcontext.height;
+	viewport.minDepth = 0;
+	viewport.maxDepth = 1;
+	
+	VkRect2D scissors;
+	scissors.offset = VkOffset2D( 0, 0 );
+	scissors.extent = VkExtent2D( vkcontext.width, vkcontext.height );
+	
+	VkPipelineViewportStateCreateInfo viewportState;
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.pViewports = &viewport;
+	viewportState.scissorCount = 1;
+	viewportState.pScissors = &scissors;
+
+
+	VkPipelineRasterizationStateCreateInfo rasterizationState;
+	rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizationState.depthClampEnable = VK_FALSE;
+	rasterizationState.rasterizerDiscardEnable = VK_FALSE;
+	rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizationState.cullMode = VK_CULL_MODE_NONE;
+	rasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizationState.depthBiasEnable = VK_FALSE;
+	rasterizationState.depthBiasConstantFactor = 0;
+	rasterizationState.depthBiasClamp = 0;
+	rasterizationState.depthBiasSlopeFactor = 0;
+	rasterizationState.lineWidth = 1;
+
+	VkPipelineMultisampleStateCreateInfo multisampleState;
+	multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampleState.sampleShadingEnable = VK_FALSE;
+	multisampleState.minSampleShading = 0;
+	multisampleState.pSampleMask = null;
+	multisampleState.alphaToCoverageEnable = VK_FALSE;
+	multisampleState.alphaToOneEnable = VK_FALSE;
+
+
+	VkStencilOpState noOPStencilState = {};
+	noOPStencilState.failOp = VK_STENCIL_OP_KEEP;
+	noOPStencilState.passOp = VK_STENCIL_OP_KEEP;
+	noOPStencilState.depthFailOp = VK_STENCIL_OP_KEEP;
+	noOPStencilState.compareOp = VK_COMPARE_OP_ALWAYS;
+	noOPStencilState.compareMask = 0;
+	noOPStencilState.writeMask = 0;
+	noOPStencilState.reference = 0;
+	
+	VkPipelineDepthStencilStateCreateInfo depthState;
+	depthState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthState.depthTestEnable = VK_TRUE;
+	depthState.depthWriteEnable = VK_TRUE;
+	depthState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	depthState.depthBoundsTestEnable = VK_FALSE;
+	depthState.stencilTestEnable = VK_FALSE;
+	depthState.front = noOPStencilState;
+	depthState.back = noOPStencilState;
+	depthState.minDepthBounds = 0;
+	depthState.maxDepthBounds = 0;
+
+	VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {};
+	colorBlendAttachmentState.blendEnable = VK_FALSE;
+	colorBlendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_COLOR;
+	colorBlendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+	colorBlendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+	colorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+	colorBlendAttachmentState.colorWriteMask = 0xf;
+	
+	VkPipelineColorBlendStateCreateInfo colorBlendState = {};
+	colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlendState.logicOpEnable = VK_FALSE;
+	colorBlendState.logicOp = VK_LOGIC_OP_CLEAR;
+	colorBlendState.attachmentCount = 1;
+	colorBlendState.pAttachments = &colorBlendAttachmentState;
+	colorBlendState.blendConstants[0] = 0.0;
+	colorBlendState.blendConstants[1] = 0.0;
+	colorBlendState.blendConstants[2] = 0.0;
+	colorBlendState.blendConstants[3] = 0.0;
+
+	VkDynamicState[2] dynamicState = [ VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR ];
+	VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo;
+	dynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicStateCreateInfo.dynamicStateCount = 2;
+	dynamicStateCreateInfo.pDynamicStates = dynamicState.ptr;
+
+	VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
+	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineCreateInfo.stageCount = 2;
+	pipelineCreateInfo.pStages = shaderStageCreateInfo.ptr;
+	pipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
+	pipelineCreateInfo.pInputAssemblyState = &inputAssemblyStateCreateInfo;
+	pipelineCreateInfo.pTessellationState = null;
+	pipelineCreateInfo.pViewportState = &viewportState;
+	pipelineCreateInfo.pRasterizationState = &rasterizationState;
+	pipelineCreateInfo.pMultisampleState = &multisampleState;
+	pipelineCreateInfo.pDepthStencilState = &depthState;
+	pipelineCreateInfo.pColorBlendState = &colorBlendState;
+	pipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
+	pipelineCreateInfo.layout = vkcontext.pipelineLayout;
+	pipelineCreateInfo.renderPass = vkcontext.renderPass;
+	pipelineCreateInfo.subpass = 0;
+	pipelineCreateInfo.basePipelineHandle = null;
+	pipelineCreateInfo.basePipelineIndex = 0;
+
+	enforceVk(vkCreateGraphicsPipelines(vkcontext.logicalDevice, null, 1, &pipelineCreateInfo, null, &vkcontext.pipeline));
+
+
 	//Render
 	bool shouldClose = false;
 	while(!shouldClose){
@@ -638,28 +803,125 @@ void main()
 			}
 		}
 
-//	  uint nextImageIdx = 0;
-//    enforceVk(vkAcquireNextImageKHR(
-//			vkcontext.logicalDevice,
-//			vkcontext.swapchain,
-//			ulong.max,
-//			null, submitFence, &nextImageIdx
-//		));
-//
-//    VkPresentInfoKHR presentInfo;
-//    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-//    presentInfo.pNext = null;
-//    presentInfo.waitSemaphoreCount = 0;
-//    presentInfo.pWaitSemaphores = null;
-//    presentInfo.swapchainCount = 1;
-//    presentInfo.pSwapchains = &vkcontext.swapchain;
-//    presentInfo.pImageIndices = &nextImageIdx;
-//    presentInfo.pResults = null;
-//    vkQueuePresentKHR( vkcontext.presentQueue, &presentInfo );
+		VkSemaphore presentCompleteSemaphore, renderingCompleteSemaphore;
+		auto semaphoreCreateInfo = VkSemaphoreCreateInfo( VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, null, 0 );
+    vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &presentCompleteSemaphore );
+    vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &renderingCompleteSemaphore );
+	
+    uint32_t nextImageIdx;
+    vkAcquireNextImageKHR(  vkcontext.logicalDevice, vkcontext.swapchain, ulong.max,
+                            presentCompleteSemaphore, null, &nextImageIdx );
+	
+    vkBeginCommandBuffer( vkcontext.drawCmdBuffer, &beginInfo );
+	
+    VkImageMemoryBarrier layoutToColorTrans;
+    layoutToColorTrans.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    layoutToColorTrans.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    layoutToColorTrans.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                                       VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    layoutToColorTrans.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    layoutToColorTrans.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    layoutToColorTrans.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    layoutToColorTrans.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    layoutToColorTrans.image = vkcontext.presentImages[ nextImageIdx ];
+    auto resourceRange = VkImageSubresourceRange( VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 );
+    layoutToColorTrans.subresourceRange = resourceRange;
+	
+    vkCmdPipelineBarrier(vkcontext.drawCmdBuffer,
+                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+                         0,
+                         0, null,
+                         0, null, 
+                         1, &layoutToColorTrans );
+		VkClearColorValue clearColorValue;
+		clearColorValue.float32[0] = 1.0f;
+		clearColorValue.float32[1] = 1.0f;
+		clearColorValue.float32[2] = 1.0f;
+		clearColorValue.float32[3] = 1.0f;
+
+		VkClearValue firstclearValue;
+		firstclearValue.color = clearColorValue;
+
+		VkClearValue secondclearValue;
+		secondclearValue.depthStencil = VkClearDepthStencilValue(1.0, 0);
+			
+		VkClearValue[2] clearValue = [ firstclearValue, secondclearValue ];
+
+    VkRenderPassBeginInfo renderPassBeginInfo;
+    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassBeginInfo.renderPass = vkcontext.renderPass;
+    renderPassBeginInfo.framebuffer = vkcontext.frameBuffers[ nextImageIdx ];
+    renderPassBeginInfo.renderArea = VkRect2D(VkOffset2D(0, 0), VkExtent2D(vkcontext.width, vkcontext.height));
+    renderPassBeginInfo.clearValueCount = 2;
+    renderPassBeginInfo.pClearValues = clearValue.ptr;
+    vkCmdBeginRenderPass( vkcontext.drawCmdBuffer, &renderPassBeginInfo, 
+                          VK_SUBPASS_CONTENTS_INLINE );
+
+		vkCmdBindPipeline(vkcontext.drawCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vkcontext.pipeline);
+		vkCmdSetViewport(vkcontext.drawCmdBuffer, 0, 1, &viewport);
+		vkCmdSetScissor(vkcontext.drawCmdBuffer, 0 ,1, &scissors);
+
+		VkDeviceSize offsets;
+		vkCmdBindVertexBuffers( vkcontext.drawCmdBuffer, 0, 1, &vkcontext.vertexInputBuffer, &offsets );
+		vkCmdDraw( vkcontext.drawCmdBuffer, 3, 1, 0, 0 );
+		vkCmdEndRenderPass( vkcontext.drawCmdBuffer );
+		
+
+		VkImageMemoryBarrier prePresentBarrier;
+    prePresentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    prePresentBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    prePresentBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    prePresentBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    prePresentBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    prePresentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    prePresentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    prePresentBarrier.subresourceRange = resourceRange;
+    prePresentBarrier.image = vkcontext.presentImages[ nextImageIdx ];
+    
+    vkCmdPipelineBarrier( vkcontext.drawCmdBuffer, 
+                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
+                          0, 
+                          0, null, 
+                          0, null, 
+                          1, &prePresentBarrier );
+
+    vkEndCommandBuffer( vkcontext.drawCmdBuffer );
+
+		VkFence renderFence;
+		VkFenceCreateInfo renderFenceCreateInfo;
+		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    vkCreateFence( vkcontext.logicalDevice, &renderFenceCreateInfo, null, &renderFence );
+
+		VkPipelineStageFlags[1] waitRenderMask = [ VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ];
+    VkSubmitInfo renderSubmitInfo;
+    renderSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    renderSubmitInfo.waitSemaphoreCount = 1;
+    renderSubmitInfo.pWaitSemaphores = &presentCompleteSemaphore;
+    renderSubmitInfo.pWaitDstStageMask = waitRenderMask.ptr;
+    renderSubmitInfo.commandBufferCount = 1;
+    renderSubmitInfo.pCommandBuffers = &vkcontext.drawCmdBuffer;
+    renderSubmitInfo.signalSemaphoreCount = 1;
+    renderSubmitInfo.pSignalSemaphores = &renderingCompleteSemaphore;
+    vkQueueSubmit( vkcontext.presentQueue, 1, &renderSubmitInfo, renderFence );
+
+    vkWaitForFences( vkcontext.logicalDevice, 1, &renderFence, VK_TRUE, ulong.max );
+    vkDestroyFence( vkcontext.logicalDevice, renderFence, null );
+
+    VkPresentInfoKHR presentInfo;
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.pNext = null;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &renderingCompleteSemaphore;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &vkcontext.swapchain;
+    presentInfo.pImageIndices = &nextImageIdx;
+    presentInfo.pResults = null;
+    vkQueuePresentKHR( vkcontext.presentQueue, &presentInfo );
+
+    vkDestroySemaphore( vkcontext.logicalDevice, presentCompleteSemaphore, null );
+    vkDestroySemaphore( vkcontext.logicalDevice, renderingCompleteSemaphore, null );
+		SDL_Delay(1000);
 	}
-
-
-
-
-
 }
