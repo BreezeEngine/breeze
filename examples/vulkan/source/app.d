@@ -38,6 +38,10 @@ struct VkContext{
 	VkImage[] presentImages;
 	VkImage depthImage;
 	VkPhysicalDeviceMemoryProperties memoryProperties;
+	VkImageView depthImageView;
+	VkRenderPass renderPass;
+	VkFramebuffer[] frameBuffers;
+	VkBuffer vertexInputBuffer;
 }
 void main()
 {
@@ -423,7 +427,6 @@ void main()
 		if(memoryTypeBits & 1){
 			if((memoryType.propertyFlags & desiredMemoryFlags) is desiredMemoryFlags){
 				imageAllocationInfo.memoryTypeIndex = index;
-				writeln("found index at ", index);
 				break;
 			}
 		}
@@ -435,8 +438,197 @@ void main()
 
 	enforceVk(vkBindImageMemory(vkcontext.logicalDevice, vkcontext.depthImage, imageMemory, 0));
 
-	//Render
+	
+	vkBeginCommandBuffer(vkcontext.setupCmdBuffer, &beginInfo);
+	VkImageMemoryBarrier layoutTransitionBarrier;
+	layoutTransitionBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	layoutTransitionBarrier.srcAccessMask = 0;
+	layoutTransitionBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+	layoutTransitionBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	layoutTransitionBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	layoutTransitionBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	layoutTransitionBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	layoutTransitionBarrier.image = vkcontext.depthImage;
+	layoutTransitionBarrier.subresourceRange = VkImageSubresourceRange(VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1);
 
+	vkCmdPipelineBarrier(
+		vkcontext.setupCmdBuffer,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		0,
+		0, null,
+		0, null,
+		1, &layoutTransitionBarrier
+	);
+
+	vkEndCommandBuffer(vkcontext.setupCmdBuffer);
+
+	VkPipelineStageFlags[1] waitStageMask = [ VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT ];
+	VkSubmitInfo submitInfo;
+	submitInfo.waitSemaphoreCount = 0;
+	submitInfo.pWaitSemaphores = null;
+	submitInfo.pWaitDstStageMask = waitStageMask.ptr;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &vkcontext.setupCmdBuffer;
+	submitInfo.signalSemaphoreCount = 0;
+	submitInfo.pSignalSemaphores = null;
+
+	vkQueueSubmit(vkcontext.presentQueue, 1, &submitInfo, submitFence);
+
+	vkWaitForFences(vkcontext.logicalDevice, 1, &submitFence, VK_TRUE, ulong.max);
+	vkResetFences(vkcontext.logicalDevice, 1, &submitFence);
+	vkResetCommandBuffer(vkcontext.setupCmdBuffer, 0);
+
+	VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	VkImageViewCreateInfo imageViewCreateInfo;
+	imageViewCreateInfo.image = vkcontext.depthImage;
+	imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	imageViewCreateInfo.format = imageCreateInfo.format;
+	imageViewCreateInfo.components =
+		VkComponentMapping(VK_COMPONENT_SWIZZLE_IDENTITY,
+			VK_COMPONENT_SWIZZLE_IDENTITY,
+			VK_COMPONENT_SWIZZLE_IDENTITY,
+			VK_COMPONENT_SWIZZLE_IDENTITY
+	);
+	imageViewCreateInfo.subresourceRange.aspectMask = aspectMask;
+	imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+	imageViewCreateInfo.subresourceRange.levelCount = 1;
+	imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+	imageViewCreateInfo.subresourceRange.layerCount = 1;
+
+	enforceVk(vkCreateImageView(vkcontext.logicalDevice, &imageViewCreateInfo, null, &vkcontext.depthImageView));
+
+	VkAttachmentDescription[2] passAttachments;
+	passAttachments[0].format = colorFormat;
+	passAttachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+	passAttachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	passAttachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	passAttachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	passAttachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	passAttachments[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	passAttachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	
+	passAttachments[1].format = VK_FORMAT_D16_UNORM;
+	passAttachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+	passAttachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	passAttachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	passAttachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	passAttachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	passAttachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+
+	VkAttachmentReference colorAttachmentReference;
+	colorAttachmentReference.attachment = 0;
+	colorAttachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkAttachmentReference depthAttachmentReference;
+	depthAttachmentReference.attachment = 0;
+	depthAttachmentReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpass;
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorAttachmentReference;
+	subpass.pDepthStencilAttachment = &depthAttachmentReference;
+	
+	VkRenderPassCreateInfo renderPassCreateInfo;
+	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassCreateInfo.attachmentCount = 2;
+	renderPassCreateInfo.pAttachments = passAttachments.ptr;
+	renderPassCreateInfo.subpassCount = 1;
+	renderPassCreateInfo.pSubpasses = &subpass;
+
+	enforceVk(vkCreateRenderPass(vkcontext.logicalDevice, &renderPassCreateInfo, null, &vkcontext.renderPass));
+
+	VkImageView[2] frameBufferAttachments;
+	frameBufferAttachments[1] = vkcontext.depthImageView;
+
+	VkFramebufferCreateInfo frameBufferCreateInfo;
+	frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	frameBufferCreateInfo.renderPass = vkcontext.renderPass;
+	frameBufferCreateInfo.attachmentCount = 2;
+	frameBufferCreateInfo.pAttachments = frameBufferAttachments.ptr;
+	frameBufferCreateInfo.width = vkcontext.width;
+	frameBufferCreateInfo.height = vkcontext.height;
+	frameBufferCreateInfo.layers = 1;
+
+	vkcontext.frameBuffers = new VkFramebuffer[](imageCount);
+	foreach(index; iota(0, imageCount)){
+		frameBufferAttachments[0] = presentImageViews[index];
+		enforceVk(vkCreateFramebuffer(vkcontext.logicalDevice, &frameBufferCreateInfo, null, &vkcontext.frameBuffers[index]));
+	}
+
+	struct Vertex{
+		float x, y, z, w;
+	}
+	VkBufferCreateInfo vertexInputBufferInfo;
+	vertexInputBufferInfo.size = Vertex.sizeof * 3;
+	vertexInputBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	vertexInputBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	enforceVk(vkCreateBuffer(vkcontext.logicalDevice, &vertexInputBufferInfo, null, &vkcontext.vertexInputBuffer));
+
+	VkMemoryRequirements vertexBufferMemoryReq;
+	vkGetBufferMemoryRequirements(vkcontext.logicalDevice, vkcontext.vertexInputBuffer, &vertexBufferMemoryReq);
+
+	VkMemoryAllocateInfo bufferAllocateInfo;
+	bufferAllocateInfo.allocationSize = vertexBufferMemoryReq.size;
+
+	uint vertexMemoryTypeBits = vertexBufferMemoryReq.memoryTypeBits;
+	VkMemoryPropertyFlags vertexDesiredMemoryFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+	foreach(index; iota(0, 32)){
+		VkMemoryType memoryType = vkcontext.memoryProperties.memoryTypes[index];
+		if(memoryTypeBits & 1){
+			if((memoryType.propertyFlags & vertexDesiredMemoryFlags) is vertexDesiredMemoryFlags){
+				bufferAllocateInfo.memoryTypeIndex = index;
+				break;
+			}
+		}
+		vertexMemoryTypeBits = vertexMemoryTypeBits >> 1;
+	}
+
+	VkDeviceMemory vertexBufferMemory;
+	enforceVk(vkAllocateMemory(vkcontext.logicalDevice, &bufferAllocateInfo, null, &vertexBufferMemory));
+	
+	void* mapped;
+	enforceVk(vkMapMemory(vkcontext.logicalDevice, vertexBufferMemory, 0, VK_WHOLE_SIZE, 0, &mapped));
+
+	//Vertex[] test = cast(Vertex[])mapped[0 .. Vertex.sizeof * 3];
+	Vertex* triangle = cast(Vertex*) mapped;
+
+	triangle[0] = Vertex(-1.0f, -1.0f, 0.0f, 1.0f);
+	triangle[1] = Vertex(1.0f, -1.0f, 0.0f, 1.0f);
+	triangle[1] = Vertex(0.0f, 1.0f, 0.0f, 1.0f);
+
+	vkUnmapMemory(vkcontext.logicalDevice, vertexBufferMemory );
+	enforceVk(vkBindBufferMemory(vkcontext.logicalDevice, vkcontext.vertexInputBuffer, vertexBufferMemory, 0));
+
+	auto vertFile = File("bin/vert.spv", "r");
+	auto fragFile = File("bin/frag.spv", "r");
+
+	char[] vertCode = new char[](10000);
+	auto vertCodeSlice = vertFile.rawRead(vertCode);
+
+	char[] fragCode = new char[](10000);
+	auto fragCodeSlice = fragFile.rawRead(fragCode);
+
+	VkShaderModuleCreateInfo vertexShaderCreateInfo;
+	vertexShaderCreateInfo.codeSize = vertCodeSlice.length;
+	vertexShaderCreateInfo.pCode = cast(uint*)vertCodeSlice.ptr;
+
+	VkShaderModuleCreateInfo fragmentShaderCreateInfo;
+	fragmentShaderCreateInfo.codeSize = fragCodeSlice.length;
+	fragmentShaderCreateInfo.pCode = cast(uint*)fragCodeSlice.ptr;
+
+	VkShaderModule vertexShaderModule;
+	enforceVk(vkCreateShaderModule(vkcontext.logicalDevice, &vertexShaderCreateInfo, null, &vertexShaderModule));
+
+	VkShaderModule fragmentShaderModule;
+	enforceVk(vkCreateShaderModule(vkcontext.logicalDevice, &fragmentShaderCreateInfo, null, &fragmentShaderModule));
+
+	//Render
 	bool shouldClose = false;
 	while(!shouldClose){
 		SDL_Event event;
