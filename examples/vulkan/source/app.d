@@ -17,8 +17,9 @@ extern(System) VkBool32 MyDebugReportCallback(
 	void*                       pUserData) nothrow @nogc
 {
 	import std.stdio;
-	printf("Debug: \n");
+	printf("ObjectTpye: %i  \n", objectType);
 	printf(pMessage);
+	printf("\n");
 	return VK_FALSE;
 }
 
@@ -71,7 +72,7 @@ void main()
 	VkApplicationInfo appinfo;
 	appinfo.pApplicationName = "Breeze";
 	appinfo.apiVersion = VK_MAKE_VERSION(1, 0, 2);
-	
+
 	const(char*)[3] extensionNames = [
 		"VK_KHR_surface",
 		"VK_KHR_xlib_surface",
@@ -367,11 +368,11 @@ void main()
 
 		vkCmdPipelineBarrier(
 			vkcontext.setupCmdBuffer,
-			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
-			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 			0,
 			0, null,
-			0, null, 
+			0, null,
 			1, &layoutTransitionBarrier );
 
 		vkEndCommandBuffer(vkcontext.setupCmdBuffer);
@@ -508,7 +509,7 @@ void main()
 	passAttachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	passAttachments[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	passAttachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	
+
 	passAttachments[1].format = VK_FORMAT_D16_UNORM;
 	passAttachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
 	passAttachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -531,7 +532,7 @@ void main()
 	subpass.colorAttachmentCount = 1;
 	subpass.pColorAttachments = &colorAttachmentReference;
 	subpass.pDepthStencilAttachment = &depthAttachmentReference;
-	
+
 	VkRenderPassCreateInfo renderPassCreateInfo;
 	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassCreateInfo.attachmentCount = 2;
@@ -592,7 +593,7 @@ void main()
 
 	VkDeviceMemory vertexBufferMemory;
 	enforceVk(vkAllocateMemory(vkcontext.logicalDevice, &bufferAllocateInfo, null, &vertexBufferMemory));
-	
+
 	void* mapped;
 	enforceVk(vkMapMemory(vkcontext.logicalDevice, vertexBufferMemory, 0, VK_WHOLE_SIZE, 0, &mapped));
 
@@ -642,7 +643,7 @@ void main()
 	shaderStageCreateInfo[0]._module = vertexShaderModule;
 	shaderStageCreateInfo[0].pName = "main";				// shader entry point function name
 	shaderStageCreateInfo[0].pSpecializationInfo = null;
-	
+
 	shaderStageCreateInfo[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	shaderStageCreateInfo[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	shaderStageCreateInfo[1]._module = fragmentShaderModule;
@@ -653,20 +654,20 @@ void main()
 	vertexBindingDescription.binding = 0;
 	vertexBindingDescription.stride = Vertex.sizeof;
 	vertexBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-	
+
 	VkVertexInputAttributeDescription vertexAttributeDescritpion = {};
 	vertexAttributeDescritpion.location = 0;
 	vertexAttributeDescritpion.binding = 0;
 	vertexAttributeDescritpion.format = VK_FORMAT_R32G32B32A32_SFLOAT;
 	vertexAttributeDescritpion.offset = 0;
-	
+
 	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {};
 	vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	vertexInputStateCreateInfo.vertexBindingDescriptionCount = 1;
 	vertexInputStateCreateInfo.pVertexBindingDescriptions = &vertexBindingDescription;
 	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 1;
 	vertexInputStateCreateInfo.pVertexAttributeDescriptions = &vertexAttributeDescritpion;
-	
+
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo = {};
 	inputAssemblyStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	inputAssemblyStateCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -679,11 +680,11 @@ void main()
 	viewport.height = vkcontext.height;
 	viewport.minDepth = 0;
 	viewport.maxDepth = 1;
-	
+
 	VkRect2D scissors;
 	scissors.offset = VkOffset2D( 0, 0 );
 	scissors.extent = VkExtent2D( vkcontext.width, vkcontext.height );
-	
+
 	VkPipelineViewportStateCreateInfo viewportState;
 	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 	viewportState.viewportCount = 1;
@@ -722,7 +723,7 @@ void main()
 	noOPStencilState.compareMask = 0;
 	noOPStencilState.writeMask = 0;
 	noOPStencilState.reference = 0;
-	
+
 	VkPipelineDepthStencilStateCreateInfo depthState;
 	depthState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depthState.depthTestEnable = VK_TRUE;
@@ -744,7 +745,7 @@ void main()
 	colorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 	colorBlendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
 	colorBlendAttachmentState.colorWriteMask = 0xf;
-	
+
 	VkPipelineColorBlendStateCreateInfo colorBlendState = {};
 	colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colorBlendState.logicOpEnable = VK_FALSE;
@@ -798,11 +799,13 @@ void main()
 		}
 
 		uint32_t nextImageIdx;
-		vkAcquireNextImageKHR(vkcontext.logicalDevice, vkcontext.swapchain, ulong.max,
-													vkcontext.presentCompleteSemaphore, null, &nextImageIdx );
-	
+		vkAcquireNextImageKHR(
+			vkcontext.logicalDevice, vkcontext.swapchain, ulong.max,
+			vkcontext.presentCompleteSemaphore, null, &nextImageIdx
+		);
+
 		vkBeginCommandBuffer( vkcontext.drawCmdBuffer, &beginInfo );
-	
+
 		VkImageMemoryBarrier layoutToColorTrans;
 		layoutToColorTrans.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 		layoutToColorTrans.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
@@ -815,14 +818,16 @@ void main()
 		layoutToColorTrans.image = vkcontext.presentImages[ nextImageIdx ];
 		auto resourceRange = VkImageSubresourceRange( VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 );
 		layoutToColorTrans.subresourceRange = resourceRange;
-	
-		vkCmdPipelineBarrier(vkcontext.drawCmdBuffer,
-												 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
-												 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
-												 0,
-												 0, null,
-												 0, null, 
-												 1, &layoutToColorTrans );
+
+		vkCmdPipelineBarrier(
+			vkcontext.drawCmdBuffer,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			0,
+			0, null,
+			0, null,
+			1, &layoutToColorTrans
+		);
 		VkClearColorValue clearColorValue;
 		clearColorValue.float32[0] = 1.0f;
 		clearColorValue.float32[1] = 1.0f;
@@ -834,7 +839,7 @@ void main()
 
 		VkClearValue secondclearValue;
 		secondclearValue.depthStencil = VkClearDepthStencilValue(1.0, 0);
-			
+
 		VkClearValue[2] clearValue = [ firstclearValue, secondclearValue ];
 
 		VkRenderPassBeginInfo renderPassBeginInfo;
@@ -869,21 +874,18 @@ void main()
 		prePresentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		prePresentBarrier.subresourceRange = resourceRange;
 		prePresentBarrier.image = vkcontext.presentImages[ nextImageIdx ];
-		
-		vkCmdPipelineBarrier( vkcontext.drawCmdBuffer, 
-													VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
-													VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
-													0, 
-													0, null, 
-													0, null, 
-													1, &prePresentBarrier );
+
+		vkCmdPipelineBarrier(
+			vkcontext.drawCmdBuffer,
+			VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+			0,
+			0, null,
+			0, null,
+			1, &prePresentBarrier
+		);
 
 		vkEndCommandBuffer( vkcontext.drawCmdBuffer );
-
-		VkFence renderFence;
-		VkFenceCreateInfo renderFenceCreateInfo;
-		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		vkCreateFence( vkcontext.logicalDevice, &renderFenceCreateInfo, null, &renderFence );
 
 		VkPipelineStageFlags[1] waitRenderMask = [ VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ];
 		VkSubmitInfo renderSubmitInfo;
@@ -910,4 +912,41 @@ void main()
 		vkQueuePresentKHR( vkcontext.presentQueue, &presentInfo );
 		vkQueueWaitIdle(vkcontext.presentQueue);
 	}
+
+	vkDestroyFence(vkcontext.logicalDevice, submitFence, null);
+
+	vkFreeMemory(vkcontext.logicalDevice, vertexBufferMemory, null);
+	vkDestroyBuffer(vkcontext.logicalDevice, vkcontext.vertexInputBuffer, null);
+	vkDestroyPipeline(vkcontext.logicalDevice, vkcontext.pipeline, null);
+	vkDestroyPipelineLayout(vkcontext.logicalDevice, vkcontext.pipelineLayout, null);
+	vkDestroyRenderPass(vkcontext.logicalDevice, vkcontext.renderPass, null);
+
+	foreach(ref framebuffer; vkcontext.frameBuffers){
+		vkDestroyFramebuffer(vkcontext.logicalDevice, framebuffer, null);
+	}
+
+	vkDestroyShaderModule(vkcontext.logicalDevice, fragmentShaderModule, null);
+	vkDestroyShaderModule(vkcontext.logicalDevice, vertexShaderModule, null);
+
+	vkDestroyImageView(vkcontext.logicalDevice, vkcontext.depthImageView, null);
+	vkDestroyImage(vkcontext.logicalDevice, vkcontext.depthImage, null);
+	vkFreeMemory(vkcontext.logicalDevice, imageMemory, null);
+
+	vkFreeCommandBuffers(vkcontext.logicalDevice, commandPool, 1, &vkcontext.drawCmdBuffer);
+	vkFreeCommandBuffers(vkcontext.logicalDevice, commandPool, 1, &vkcontext.setupCmdBuffer);
+	vkDestroyCommandPool(vkcontext.logicalDevice, commandPool, null);
+
+	foreach(ref presentImageView; presentImageViews){
+		vkDestroyImageView(vkcontext.logicalDevice, presentImageView, null);
+	}
+
+	vkDestroySwapchainKHR(vkcontext.logicalDevice, vkcontext.swapchain, null);
+
+	vkDestroySemaphore(vkcontext.logicalDevice, vkcontext.presentCompleteSemaphore, null);
+	vkDestroySemaphore(vkcontext.logicalDevice, vkcontext.renderingCompleteSemaphore, null);
+
+	vkDestroyDevice(vkcontext.logicalDevice, null);
+	vkDestroySurfaceKHR(vkcontext.instance, vkcontext.surface, null);
+	vkDestroyDebugReportCallbackEXT(vkcontext.instance, callback, null);
+	vkDestroyInstance(vkcontext.instance, null);
 }
