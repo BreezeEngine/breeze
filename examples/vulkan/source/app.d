@@ -1,4 +1,3 @@
-import std.stdio;
 import erupted;
 
 void enforceVk(VkResult res){
@@ -6,21 +5,20 @@ void enforceVk(VkResult res){
 	import std.conv;
 	enforce(res is VkResult.VK_SUCCESS, res.to!string);
 }
-VkBool32 MyDebugReportCallback(
-    VkDebugReportFlagsEXT       flags,
-    VkDebugReportObjectTypeEXT  objectType,
-    uint64_t                    object,
-    size_t                      location,
-    int32_t                     messageCode,
-    const char*                 pLayerPrefix,
-    const char*                 pMessage,
-    void*                       pUserData) nothrow @nogc
+
+extern(System) VkBool32 MyDebugReportCallback(
+	VkDebugReportFlagsEXT       flags,
+	VkDebugReportObjectTypeEXT  objectType,
+	uint64_t                    object,
+	size_t                      location,
+	int32_t                     messageCode,
+	const char*                 pLayerPrefix,
+	const char*                 pMessage,
+	void*                       pUserData) nothrow @nogc
 {
-	import std.range;
-	import std.string;
-//	printf("Debug: \n");
-//	printf(pMessage);
-	//printf("\n");
+	import std.stdio;
+	printf("Debug: \n");
+	printf(pMessage);
 	return VK_FALSE;
 }
 
@@ -47,12 +45,15 @@ struct VkContext{
 	VkPipeline pipeline;
 	VkSemaphore presentCompleteSemaphore, renderingCompleteSemaphore;
 }
+
 void main()
 {
 	import std.exception;
 	import derelict.sdl2.sdl;
 	import std.algorithm.searching;
 	import std.algorithm.iteration;
+	import std.range: iota;
+	import std.stdio;
 	import core.stdc.string;
 
 	VkContext vkcontext;
@@ -60,7 +61,7 @@ void main()
 	vkcontext.height = 600;
 
 	DerelictSDL2.load();
-	auto sdlWindow = SDL_CreateWindow("vulkan", 0, 0, 800, 600, SDL_WINDOW_OPENGL);
+	auto sdlWindow = SDL_CreateWindow("vulkan", 0, 0, 800, 600, 0);
 	SDL_SysWMinfo sdlWindowInfo;
 
 	SDL_VERSION(&sdlWindowInfo.version_);
@@ -111,14 +112,12 @@ void main()
 	createinfo.ppEnabledLayerNames = validationLayers.ptr;
 
 	enforceVk(vkCreateInstance(&createinfo, null, &vkcontext.instance));
-	//uint function(uint flags, VkDebugReportObjectTypeEXT objectType, ulong object, ulong location, int messageCode, const(char*) pLayerPrefix, const(char*) pMessage, void* pUserData)
 
 	loadInstanceLevelFunctions(vkcontext.instance);
 	auto debugcallbackCreateInfo = VkDebugReportCallbackCreateInfoEXT(
 		VkStructureType.VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
 		null,
 		VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_ERROR_BIT_EXT |
-		VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_INFORMATION_BIT_EXT |
 		VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_WARNING_BIT_EXT |
 		VkDebugReportFlagBitsEXT.VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
 		&MyDebugReportCallback,
@@ -134,7 +133,6 @@ void main()
 		sdlWindowInfo.info.x11.display,
 		sdlWindowInfo.info.x11.window
 	);
-	//vkCreateXcbSurfaceKHR();
 	enforceVk(vkCreateXlibSurfaceKHR(vkcontext.instance, &xlibInfo, null, &vkcontext.surface));
 
 	uint numOfDevices;
@@ -161,7 +159,7 @@ void main()
 			});
 
 			VkBool32 supportsPresent;
-      vkGetPhysicalDeviceSurfaceSupportKHR(
+			vkGetPhysicalDeviceSurfaceSupportKHR(
 				device, cast(uint)presentIndex,
 				vkcontext.surface, &supportsPresent
 			);
@@ -246,10 +244,10 @@ void main()
 
 	uint desiredImageCount = 2;
 	if( desiredImageCount < surfaceCapabilities.minImageCount ) {
-	    desiredImageCount = surfaceCapabilities.minImageCount;
+		desiredImageCount = surfaceCapabilities.minImageCount;
 	}
-	else if( surfaceCapabilities.maxImageCount != 0 &&
-	         desiredImageCount > surfaceCapabilities.maxImageCount ) {
+	else if(surfaceCapabilities.maxImageCount != 0 &&
+					desiredImageCount > surfaceCapabilities.maxImageCount ) {
 		desiredImageCount = surfaceCapabilities.maxImageCount;
 	}
 
@@ -341,7 +339,6 @@ void main()
 	imgViewCreateInfo.subresourceRange.baseArrayLayer = 0;
 	imgViewCreateInfo.subresourceRange.layerCount = 1;
 
-
 	VkCommandBufferBeginInfo beginInfo;
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -353,7 +350,6 @@ void main()
 	vkCreateFence(vkcontext.logicalDevice, &fenceCreateInfo, null, &submitFence);
 
 	auto presentImageViews = new VkImageView[](imageCount);
-	import std.range: iota;
 	foreach(index; iota(0, imageCount)){
 		imgViewCreateInfo.image = vkcontext.presentImages[index];
 
@@ -371,12 +367,12 @@ void main()
 
 		vkCmdPipelineBarrier(
 			vkcontext.setupCmdBuffer,
-      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
-      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
-      0,
-      0, null,
-      0, null, 
-      1, &layoutTransitionBarrier );
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+			0,
+			0, null,
+			0, null, 
+			1, &layoutTransitionBarrier );
 
 		vkEndCommandBuffer(vkcontext.setupCmdBuffer);
 
@@ -416,7 +412,6 @@ void main()
 	imageCreateInfo.pQueueFamilyIndices = null;
 	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-
 	enforceVk(vkCreateImage(vkcontext.logicalDevice, &imageCreateInfo, null, &vkcontext.depthImage));
 
 	VkMemoryRequirements memoryRequirements;
@@ -444,13 +439,12 @@ void main()
 
 	enforceVk(vkBindImageMemory(vkcontext.logicalDevice, vkcontext.depthImage, imageMemory, 0));
 
-	
 	vkBeginCommandBuffer(vkcontext.setupCmdBuffer, &beginInfo);
 	VkImageMemoryBarrier layoutTransitionBarrier;
 	layoutTransitionBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	layoutTransitionBarrier.srcAccessMask = 0;
-	layoutTransitionBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | 
-                                          VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	layoutTransitionBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+																					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 	layoutTransitionBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	layoutTransitionBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	layoutTransitionBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -520,10 +514,9 @@ void main()
 	passAttachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	passAttachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	passAttachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-passAttachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	passAttachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	passAttachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
 
 	VkAttachmentReference colorAttachmentReference;
 	colorAttachmentReference.attachment = 0;
@@ -569,6 +562,7 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
 	struct Vertex{
 		float x, y, z, w;
 	}
+
 	VkBufferCreateInfo vertexInputBufferInfo;
 	vertexInputBufferInfo.size = Vertex.sizeof * 3;
 	vertexInputBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
@@ -602,9 +596,7 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
 	void* mapped;
 	enforceVk(vkMapMemory(vkcontext.logicalDevice, vertexBufferMemory, 0, VK_WHOLE_SIZE, 0, &mapped));
 
-	//Vertex[] test = cast(Vertex[])mapped[0 .. Vertex.sizeof * 3];
-	Vertex* triangle = cast(Vertex*) mapped;
-
+	Vertex[] triangle = (cast(Vertex*)mapped)[0 .. 3];
 	triangle[0] = Vertex(-1.0f, 1.0f, 0.0f, 1.0f);
 	triangle[1] = Vertex(1.0f, 1.0f, 0.0f, 1.0f);
 	triangle[2] = Vertex(0.0f, -1.0f, 0.0f, 1.0f);
@@ -638,7 +630,7 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
 	VkPipelineLayoutCreateInfo layoutCreateInfo;
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	layoutCreateInfo.setLayoutCount = 0;
-	layoutCreateInfo.pSetLayouts = null;    // Not setting any bindings!
+	layoutCreateInfo.pSetLayouts = null;		// Not setting any bindings!
 	layoutCreateInfo.pushConstantRangeCount = 0;
 	layoutCreateInfo.pPushConstantRanges = null;
 
@@ -648,13 +640,13 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
 	shaderStageCreateInfo[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	shaderStageCreateInfo[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
 	shaderStageCreateInfo[0]._module = vertexShaderModule;
-	shaderStageCreateInfo[0].pName = "main";        // shader entry point function name
+	shaderStageCreateInfo[0].pName = "main";				// shader entry point function name
 	shaderStageCreateInfo[0].pSpecializationInfo = null;
 	
 	shaderStageCreateInfo[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	shaderStageCreateInfo[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	shaderStageCreateInfo[1]._module = fragmentShaderModule;
-	shaderStageCreateInfo[1].pName = "main";        // shader entry point function name
+	shaderStageCreateInfo[1].pName = "main";				// shader entry point function name
 	shaderStageCreateInfo[1].pSpecializationInfo = null;
 
 	VkVertexInputBindingDescription vertexBindingDescription = {};
@@ -721,7 +713,6 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
 	multisampleState.pSampleMask = null;
 	multisampleState.alphaToCoverageEnable = VK_FALSE;
 	multisampleState.alphaToOneEnable = VK_FALSE;
-
 
 	VkStencilOpState noOPStencilState = {};
 	noOPStencilState.failOp = VK_STENCIL_OP_KEEP;
@@ -793,8 +784,8 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
 	enforceVk(vkCreateGraphicsPipelines(vkcontext.logicalDevice, null, 1, &pipelineCreateInfo, null, &vkcontext.pipeline));
 
 	auto semaphoreCreateInfo = VkSemaphoreCreateInfo( VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, null, 0 );
-  vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &vkcontext.presentCompleteSemaphore );
-  vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &vkcontext.renderingCompleteSemaphore );
+	vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &vkcontext.presentCompleteSemaphore );
+	vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &vkcontext.renderingCompleteSemaphore );
 
 	//Render
 	bool shouldClose = false;
@@ -806,36 +797,32 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
 			}
 		}
 
-//		VkSemaphore presentCompleteSemaphore, renderingCompleteSemaphore;
-//    vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &presentCompleteSemaphore );
-//    vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &renderingCompleteSemaphore );
+		uint32_t nextImageIdx;
+		vkAcquireNextImageKHR(vkcontext.logicalDevice, vkcontext.swapchain, ulong.max,
+													vkcontext.presentCompleteSemaphore, null, &nextImageIdx );
 	
-    uint32_t nextImageIdx;
-    vkAcquireNextImageKHR(  vkcontext.logicalDevice, vkcontext.swapchain, ulong.max,
-                            vkcontext.presentCompleteSemaphore, null, &nextImageIdx );
+		vkBeginCommandBuffer( vkcontext.drawCmdBuffer, &beginInfo );
 	
-    vkBeginCommandBuffer( vkcontext.drawCmdBuffer, &beginInfo );
+		VkImageMemoryBarrier layoutToColorTrans;
+		layoutToColorTrans.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		layoutToColorTrans.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		layoutToColorTrans.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+																			 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		layoutToColorTrans.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		layoutToColorTrans.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		layoutToColorTrans.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		layoutToColorTrans.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		layoutToColorTrans.image = vkcontext.presentImages[ nextImageIdx ];
+		auto resourceRange = VkImageSubresourceRange( VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 );
+		layoutToColorTrans.subresourceRange = resourceRange;
 	
-    VkImageMemoryBarrier layoutToColorTrans;
-    layoutToColorTrans.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    layoutToColorTrans.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    layoutToColorTrans.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-                                       VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    layoutToColorTrans.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    layoutToColorTrans.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    layoutToColorTrans.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    layoutToColorTrans.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    layoutToColorTrans.image = vkcontext.presentImages[ nextImageIdx ];
-    auto resourceRange = VkImageSubresourceRange( VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 );
-    layoutToColorTrans.subresourceRange = resourceRange;
-	
-    vkCmdPipelineBarrier(vkcontext.drawCmdBuffer,
-                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
-                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
-                         0,
-                         0, null,
-                         0, null, 
-                         1, &layoutToColorTrans );
+		vkCmdPipelineBarrier(vkcontext.drawCmdBuffer,
+												 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+												 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+												 0,
+												 0, null,
+												 0, null, 
+												 1, &layoutToColorTrans );
 		VkClearColorValue clearColorValue;
 		clearColorValue.float32[0] = 1.0f;
 		clearColorValue.float32[1] = 1.0f;
@@ -850,15 +837,18 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
 			
 		VkClearValue[2] clearValue = [ firstclearValue, secondclearValue ];
 
-    VkRenderPassBeginInfo renderPassBeginInfo;
-    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassBeginInfo.renderPass = vkcontext.renderPass;
-    renderPassBeginInfo.framebuffer = vkcontext.frameBuffers[ nextImageIdx ];
-    renderPassBeginInfo.renderArea = VkRect2D(VkOffset2D(0, 0), VkExtent2D(vkcontext.width, vkcontext.height));
-    renderPassBeginInfo.clearValueCount = 2;
-    renderPassBeginInfo.pClearValues = clearValue.ptr;
-    vkCmdBeginRenderPass( vkcontext.drawCmdBuffer, &renderPassBeginInfo, 
-                          VK_SUBPASS_CONTENTS_INLINE );
+		VkRenderPassBeginInfo renderPassBeginInfo;
+		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassBeginInfo.renderPass = vkcontext.renderPass;
+		renderPassBeginInfo.framebuffer = vkcontext.frameBuffers[ nextImageIdx ];
+		renderPassBeginInfo.renderArea = VkRect2D(VkOffset2D(0, 0), VkExtent2D(vkcontext.width, vkcontext.height));
+		renderPassBeginInfo.clearValueCount = 2;
+		renderPassBeginInfo.pClearValues = clearValue.ptr;
+
+		vkCmdBeginRenderPass(
+			vkcontext.drawCmdBuffer, &renderPassBeginInfo,
+			VK_SUBPASS_CONTENTS_INLINE
+		);
 
 		vkCmdBindPipeline(vkcontext.drawCmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vkcontext.pipeline);
 		vkCmdSetViewport(vkcontext.drawCmdBuffer, 0, 1, &viewport);
@@ -868,56 +858,56 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
 		vkCmdBindVertexBuffers( vkcontext.drawCmdBuffer, 0, 1, &vkcontext.vertexInputBuffer, &offsets );
 		vkCmdDraw( vkcontext.drawCmdBuffer, 3, 1, 0, 0 );
 		vkCmdEndRenderPass( vkcontext.drawCmdBuffer );
-		
 
 		VkImageMemoryBarrier prePresentBarrier;
-    prePresentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    prePresentBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    prePresentBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    prePresentBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    prePresentBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    prePresentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    prePresentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    prePresentBarrier.subresourceRange = resourceRange;
-    prePresentBarrier.image = vkcontext.presentImages[ nextImageIdx ];
-    
-    vkCmdPipelineBarrier( vkcontext.drawCmdBuffer, 
-                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
-                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
-                          0, 
-                          0, null, 
-                          0, null, 
-                          1, &prePresentBarrier );
+		prePresentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		prePresentBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		prePresentBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		prePresentBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		prePresentBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		prePresentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		prePresentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		prePresentBarrier.subresourceRange = resourceRange;
+		prePresentBarrier.image = vkcontext.presentImages[ nextImageIdx ];
+		
+		vkCmdPipelineBarrier( vkcontext.drawCmdBuffer, 
+													VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 
+													VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
+													0, 
+													0, null, 
+													0, null, 
+													1, &prePresentBarrier );
 
-    vkEndCommandBuffer( vkcontext.drawCmdBuffer );
+		vkEndCommandBuffer( vkcontext.drawCmdBuffer );
 
 		VkFence renderFence;
 		VkFenceCreateInfo renderFenceCreateInfo;
 		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    vkCreateFence( vkcontext.logicalDevice, &renderFenceCreateInfo, null, &renderFence );
+		vkCreateFence( vkcontext.logicalDevice, &renderFenceCreateInfo, null, &renderFence );
 
 		VkPipelineStageFlags[1] waitRenderMask = [ VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ];
-    VkSubmitInfo renderSubmitInfo;
-    renderSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    renderSubmitInfo.waitSemaphoreCount = 1;
-    renderSubmitInfo.pWaitSemaphores = &vkcontext.presentCompleteSemaphore;
-    renderSubmitInfo.pWaitDstStageMask = waitRenderMask.ptr;
-    renderSubmitInfo.commandBufferCount = 1;
-    renderSubmitInfo.pCommandBuffers = &vkcontext.drawCmdBuffer;
-    renderSubmitInfo.signalSemaphoreCount = 1;
-    renderSubmitInfo.pSignalSemaphores = &vkcontext.renderingCompleteSemaphore;
-    vkQueueSubmit( vkcontext.presentQueue, 1, &renderSubmitInfo, null );
+		VkSubmitInfo renderSubmitInfo;
+		renderSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		renderSubmitInfo.waitSemaphoreCount = 1;
+		renderSubmitInfo.pWaitSemaphores = &vkcontext.presentCompleteSemaphore;
+		renderSubmitInfo.pWaitDstStageMask = waitRenderMask.ptr;
+		renderSubmitInfo.commandBufferCount = 1;
+		renderSubmitInfo.pCommandBuffers = &vkcontext.drawCmdBuffer;
+		renderSubmitInfo.signalSemaphoreCount = 1;
+		renderSubmitInfo.pSignalSemaphores = &vkcontext.renderingCompleteSemaphore;
+		vkQueueSubmit( vkcontext.presentQueue, 1, &renderSubmitInfo, null );
 		vkQueueWaitIdle(vkcontext.presentQueue);
 
-    VkPresentInfoKHR presentInfo;
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.pNext = null;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &vkcontext.renderingCompleteSemaphore;
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &vkcontext.swapchain;
-    presentInfo.pImageIndices = &nextImageIdx;
-    presentInfo.pResults = null;
-    vkQueuePresentKHR( vkcontext.presentQueue, &presentInfo );
+		VkPresentInfoKHR presentInfo;
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfo.pNext = null;
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = &vkcontext.renderingCompleteSemaphore;
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = &vkcontext.swapchain;
+		presentInfo.pImageIndices = &nextImageIdx;
+		presentInfo.pResults = null;
+		vkQueuePresentKHR( vkcontext.presentQueue, &presentInfo );
+		vkQueueWaitIdle(vkcontext.presentQueue);
 	}
 }
