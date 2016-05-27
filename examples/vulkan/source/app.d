@@ -45,6 +45,7 @@ struct VkContext{
 	VkBuffer vertexInputBuffer;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline pipeline;
+	VkSemaphore presentCompleteSemaphore, renderingCompleteSemaphore;
 }
 void main()
 {
@@ -350,7 +351,6 @@ void main()
 
 	VkFence submitFence;
 	vkCreateFence(vkcontext.logicalDevice, &fenceCreateInfo, null, &submitFence);
-
 
 	auto presentImageViews = new VkImageView[](imageCount);
 	import std.range: iota;
@@ -792,6 +792,9 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
 
 	enforceVk(vkCreateGraphicsPipelines(vkcontext.logicalDevice, null, 1, &pipelineCreateInfo, null, &vkcontext.pipeline));
 
+	auto semaphoreCreateInfo = VkSemaphoreCreateInfo( VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, null, 0 );
+  vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &vkcontext.presentCompleteSemaphore );
+  vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &vkcontext.renderingCompleteSemaphore );
 
 	//Render
 	bool shouldClose = false;
@@ -803,14 +806,13 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
 			}
 		}
 
-		VkSemaphore presentCompleteSemaphore, renderingCompleteSemaphore;
-		auto semaphoreCreateInfo = VkSemaphoreCreateInfo( VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, null, 0 );
-    vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &presentCompleteSemaphore );
-    vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &renderingCompleteSemaphore );
+//		VkSemaphore presentCompleteSemaphore, renderingCompleteSemaphore;
+//    vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &presentCompleteSemaphore );
+//    vkCreateSemaphore( vkcontext.logicalDevice, &semaphoreCreateInfo, null, &renderingCompleteSemaphore );
 	
     uint32_t nextImageIdx;
     vkAcquireNextImageKHR(  vkcontext.logicalDevice, vkcontext.swapchain, ulong.max,
-                            presentCompleteSemaphore, null, &nextImageIdx );
+                            vkcontext.presentCompleteSemaphore, null, &nextImageIdx );
 	
     vkBeginCommandBuffer( vkcontext.drawCmdBuffer, &beginInfo );
 	
@@ -898,30 +900,24 @@ passAttachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTI
     VkSubmitInfo renderSubmitInfo;
     renderSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     renderSubmitInfo.waitSemaphoreCount = 1;
-    renderSubmitInfo.pWaitSemaphores = &presentCompleteSemaphore;
+    renderSubmitInfo.pWaitSemaphores = &vkcontext.presentCompleteSemaphore;
     renderSubmitInfo.pWaitDstStageMask = waitRenderMask.ptr;
     renderSubmitInfo.commandBufferCount = 1;
     renderSubmitInfo.pCommandBuffers = &vkcontext.drawCmdBuffer;
     renderSubmitInfo.signalSemaphoreCount = 1;
-    renderSubmitInfo.pSignalSemaphores = &renderingCompleteSemaphore;
-    vkQueueSubmit( vkcontext.presentQueue, 1, &renderSubmitInfo, renderFence );
-
-    vkWaitForFences( vkcontext.logicalDevice, 1, &renderFence, VK_TRUE, ulong.max );
-    vkDestroyFence( vkcontext.logicalDevice, renderFence, null );
+    renderSubmitInfo.pSignalSemaphores = &vkcontext.renderingCompleteSemaphore;
+    vkQueueSubmit( vkcontext.presentQueue, 1, &renderSubmitInfo, null );
+		vkQueueWaitIdle(vkcontext.presentQueue);
 
     VkPresentInfoKHR presentInfo;
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.pNext = null;
     presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = &renderingCompleteSemaphore;
+    presentInfo.pWaitSemaphores = &vkcontext.renderingCompleteSemaphore;
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = &vkcontext.swapchain;
     presentInfo.pImageIndices = &nextImageIdx;
     presentInfo.pResults = null;
     vkQueuePresentKHR( vkcontext.presentQueue, &presentInfo );
-
-    vkDestroySemaphore( vkcontext.logicalDevice, presentCompleteSemaphore, null );
-    vkDestroySemaphore( vkcontext.logicalDevice, renderingCompleteSemaphore, null );
-		SDL_Delay(1000);
 	}
 }
