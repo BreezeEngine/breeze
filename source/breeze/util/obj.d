@@ -7,19 +7,19 @@ public struct Mesh{
     Vec2f uv;
 }
 auto parsObj(string path){
-    import containers.dynamicarray;
     import breeze.math.vector;
     import std.stdio;
     import std.string;
     import std.conv;
+    import breeze.util.array;
 
-    DynamicArray!Vec3f vertices;
-    DynamicArray!Vec3f normals;
-    DynamicArray!Vec2f uvs;
+    Array!Vec3f vertices;
+    Array!Vec3f normals;
+    Array!Vec2f uvs;
 
-    DynamicArray!int vertexIndices;
-    DynamicArray!int normalIndices;
-    DynamicArray!int uvIndices;
+    Array!int vertexIndices;
+    Array!int normalIndices;
+    Array!int uvIndices;
 
     auto objFile = new File(path, "r");
     foreach(line; objFile.byLine){
@@ -73,7 +73,7 @@ auto parsObj(string path){
             }
         }
     }
-    DynamicArray!Mesh mesh;
+    Array!Mesh mesh;
     import std.range;
 
     foreach(index; iota(0, vertexIndices.length)){

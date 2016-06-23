@@ -1,0 +1,14 @@
+{
+	"fileVersion": 1,
+	"versions": {
+		"derelict-glfw3": "2.0.0",
+		"xcb-d": "1.11.1",
+		"wayland-client-d": "1.8.90",
+		"experimental_allocator": "2.70.0-b1",
+		"derelict-sdl2": "2.0.0",
+		"xlib-d": "0.1.0",
+		"emsi_containers": "0.3.0",
+		"derelict-util": "2.0.6",
+		"derelict-gl3": "1.0.18"
+	}
+}

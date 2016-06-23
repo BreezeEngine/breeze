@@ -15,6 +15,14 @@ struct Option(T){
         enforce(isSome, "");
         return value;
     }
+    string toString(){
+        import std.conv;
+        import std.format;
+        if(isSome){
+            return "Some!(%s)( %s )".format(T.stringof, value.to!string);
+        }
+        return "None!(%s)()".format(T.stringof);
+    }
 private:
     this(ref T value){
         this.value = value;
@@ -40,5 +48,29 @@ Option!T none(T)(){
     return Option!T();
 }
 
+T unwrapOr(T)(auto ref Option!T option, T defaultValue){
+    if(option.isSome){
+        return option.get;
+    }
+    else{
+        return defaultValue;
+    }
+}
 
+T expect(T)(auto ref Option!T option, string message){
+    if(option.isSome){
+        return option.get;
+    }
+    assert(false, message);
+}
+
+
+
+unittest{
+  struct Foo{
+    int someInteger;
+  }
+  Foo f;
+  
+}
 

@@ -1,0 +1,4 @@
+name "graphics"
+dependency "breeze" version="*"
+
+targetPath "../../bin"

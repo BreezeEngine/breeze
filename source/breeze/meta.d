@@ -247,6 +247,13 @@ auto zip(Ranges...)(Ranges ranges){
     import std.typecons: tuple;
     return Zip!(tuple, Ranges)(ranges);
 }
+R logicalOr(R, Ts...)(Ts ts){
+    R result = 0;
+    foreach(t; ts){
+        result |= t;
+    }
+    return result;
+}
 bool or(Ts...)(Ts ts){
     foreach(index, t; ts){
         if(ts[index]){

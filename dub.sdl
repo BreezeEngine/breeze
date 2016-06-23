@@ -4,7 +4,6 @@ authors "Maik Klein"
 license "GPL-2.0"
 dependency "derelict-sdl2" version="~>2.0.0"
 dependency "derelict-gl3" version="~>1.0.0"
-dependency "emsi_containers" version="~>0.3.0"
 
 dependency "erupted" version="~>1.3.2" path="deps/ErupteD"
 subConfiguration "erupted" "dub-platform-xlib-derelict-loader"
@@ -23,6 +22,8 @@ subPackage "./examples/soatest"
 subPackage "./examples/openglpers"
 subPackage "./examples/sdl"
 subPackage "./examples/vulkan"
+subPackage "./examples/graphics"
+subPackage "./examples/task"
 
 targetPath "./bin"
 
